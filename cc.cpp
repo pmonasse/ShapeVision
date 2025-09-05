@@ -9,7 +9,7 @@ DPoint min(const DPoint& p1, const DPoint& p2) {
 
 struct Rect {
     Pos tl, br; ///< Top-left and bottom-right corners of rectangle
-    std::list<int> chainCode[4];
+    std::list<std::list<int>> chainCode[4];
     Rect(CC& cc, Pos p, float lvl[4]);
 };
 
@@ -56,7 +56,8 @@ Rect::Rect(CC& cc, Pos p, float lvl[4]) : tl(p), br(p.x+1,p.y+1) {
             for(int i=0; i<=1; i++)
                 for(int j=2; j<=3; j++) {
                     int eid = edge_id(rank[i],rank[j]);
-                    chainCode[eid]= {cc.idx(vo[i]),c[i],idx,c[j],cc.idx(vo[j])};
+                    chainCode[eid].push_back(
+                     std::list<int>{cc.idx(vo[i]),c[i],idx,c[j],cc.idx(vo[j])});
                 }
             return;
         }
@@ -64,49 +65,54 @@ Rect::Rect(CC& cc, Pos p, float lvl[4]) : tl(p), br(p.x+1,p.y+1) {
         std::swap(vo[1],vo[2]);
     }
 
+    for(int i=0; i<4; i++) {
+        std::list<int> L;
+        chainCode[i].emplace_back(L);
+    }
+    
     int eMin = edge_id(rank[0], rank[1]);
-    chainCode[eMin].push_back(cc.idx(vo[0]));
+    chainCode[eMin].back().push_back(cc.idx(vo[0]));
     if(lvl[rank[0]]==lvl[rank[1]])
         cc.merge_contours(vo[0],vo[1]);
     else {
         c[0] = cc.create_continuum(vo[0],vo[1], tl);
-        chainCode[eMin].push_back(c[0]);
-        chainCode[eMin].push_back(cc.idx(vo[1]));
+        chainCode[eMin].back().push_back(c[0]);
+        chainCode[eMin].back().push_back(cc.idx(vo[1]));
     }
 
     int eMax = edge_id(rank[2], rank[3]);
-    chainCode[eMax].push_back(cc.idx(vo[2]));
+    chainCode[eMax].back().push_back(cc.idx(vo[2]));
     if(lvl[rank[2]]==lvl[rank[3]])
         cc.merge_contours(vo[2],vo[3]);
     else {
         c[1] = cc.create_continuum(vo[2],vo[3], tl);
-        chainCode[eMax].push_back(c[1]);
-        chainCode[eMax].push_back(cc.idx(vo[3]));
+        chainCode[eMax].back().push_back(c[1]);
+        chainCode[eMax].back().push_back(cc.idx(vo[3]));
     }
 
     if((rank[1]+rank[2])&1) { // two adjacent intermediate level vertices
         int eInt = edge_id(rank[1],rank[2]); // intermediate edge
-        chainCode[eInt].push_back(cc.idx(vo[1]));
+        chainCode[eInt].back().push_back(cc.idx(vo[1]));
         if(lvl[rank[1]]==lvl[rank[2]])
             cc.merge_contours(vo[1],vo[2]);
         else {
             c[2] = cc.create_continuum(vo[1],vo[2], tl);
-            chainCode[eInt].push_back(c[2]);
-            chainCode[eInt].push_back(cc.idx(vo[2]));
+            chainCode[eInt].back().push_back(c[2]);
+            chainCode[eInt].back().push_back(cc.idx(vo[2]));
         }
         int eMm = (eInt+2)%4; // opposite edge, linking min and max
-        chainCode[eMm].push_back(cc.idx(vo[0]));
+        chainCode[eMm].back().push_back(cc.idx(vo[0]));
         if(c[0]>=0) {
-            chainCode[eMm].push_back(c[0]);
-            chainCode[eMm].push_back(cc.idx(vo[1]));
+            chainCode[eMm].back().push_back(c[0]);
+            chainCode[eMm].back().push_back(cc.idx(vo[1]));
         }
         if(c[2]>=0) {
-            chainCode[eMm].push_back(c[2]);
-            chainCode[eMm].push_back(cc.idx(vo[2]));
+            chainCode[eMm].back().push_back(c[2]);
+            chainCode[eMm].back().push_back(cc.idx(vo[2]));
         }
         if(c[1]>=0) {
-            chainCode[eMm].push_back(c[1]);
-            chainCode[eMm].push_back(cc.idx(vo[3]));
+            chainCode[eMm].back().push_back(c[1]);
+            chainCode[eMm].back().push_back(cc.idx(vo[3]));
         }
     } else { // opposite intermediate level vertices
         if(lvl[rank[1]] == lvl[rank[2]])
@@ -114,28 +120,28 @@ Rect::Rect(CC& cc, Pos p, float lvl[4]) : tl(p), br(p.x+1,p.y+1) {
         else
             c[2] = cc.create_continuum(vo[1],vo[2], tl);
         int e02 = edge_id(rank[0],rank[2]);
-        chainCode[e02].push_back(cc.idx(vo[0]));
+        chainCode[e02].back().push_back(cc.idx(vo[0]));
         if(lvl[rank[0]] == lvl[rank[2]])
             cc.merge_contours(vo[0],vo[2]);
         else {
             if(c[0]>=0) {
-                chainCode[e02].push_back(c[0]);
-                chainCode[e02].push_back(cc.idx(vo[1]));
+                chainCode[e02].back().push_back(c[0]);
+                chainCode[e02].back().push_back(cc.idx(vo[1]));
             }
             if(c[2]>=0) {
-                chainCode[e02].push_back(c[2]);
-                chainCode[e02].push_back(cc.idx(vo[2]));
+                chainCode[e02].back().push_back(c[2]);
+                chainCode[e02].back().push_back(cc.idx(vo[2]));
             }
         }
         int e13 = (e02+2)%4;
-        chainCode[e13].push_back(cc.idx(vo[1]));
+        chainCode[e13].back().push_back(cc.idx(vo[1]));
         if(c[2]>=0) {
-            chainCode[e13].push_back(c[2]);
-            chainCode[e13].push_back(cc.idx(vo[2]));
+            chainCode[e13].back().push_back(c[2]);
+            chainCode[e13].back().push_back(cc.idx(vo[2]));
         }
         if(c[1]>=0) {
-            chainCode[e13].push_back(c[1]);
-            chainCode[e13].push_back(cc.idx(vo[3]));
+            chainCode[e13].back().push_back(c[1]);
+            chainCode[e13].back().push_back(cc.idx(vo[3]));
         }
     }
 }
