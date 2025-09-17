@@ -55,7 +55,8 @@ Rect::Rect(CC& cc, Pos p, float lvl[4]) : tl(p), br(p.x+1,p.y+1) {
         if(lvl[rank[1]] < lvl[rank[2]]) { // Saddle
             Pos s=cc.create_saddle(p, lvl);
             int idx=cc.idx(s);
-            const Contour& ctr = cc.contours[idx];
+            Contour& ctr = cc.contours[idx];
+	    ctr.p.x += p.x; ctr.p.y += p.y;
             for(int i=0; i<4; i++) {
                 DPoint p = min(pos2DPoint(vo[i]),ctr.p);
                 c[i] = cc.create_continuum(vo[i], s, p);
@@ -170,26 +171,26 @@ bool insert_chainCode(std::list<int>& L, int iSplit, int iCtn, int iCtr) {
 }
 
 /// The continuum of index \a iSplit must be split by the continuum \a iCtn
-/// with delimiting contour \a iCtr. This adds to the chain-code at the exit
-/// (last MME) these references. 
-void split_continuum(CC& cc, Rect& R, int iSplit, int iCtn, int iCtr) {
+/// with delimiting contour \a iCtr. Insert these in the chain-code at the exit
+/// edge (last MME). The side \a iSideExclude (0..3) must be skipped.
+void split_continuum(CC& cc, Rect& R, int iSplit, int iCtn, int iCtr,
+		     int iSideExclude) {
     cc.continua[iSplit].infCtr = iCtr;
     const DPoint& p = cc.continua[iSplit].mme.back();
-    std::list<int>::iterator it;
     if(p.y == R.tl.y) { // Upper edge
         std::list<std::list<int>>::iterator i = R.chainCode[0].begin();
         std::advance(i, (int)p.x-R.tl.x);
         if( insert_chainCode(*i, iSplit, iCtn, iCtr) )
             return;
     }
-    if(p.x == R.tl.x) { // Left edge
+    if(p.x == R.tl.x && iSideExclude!=3) { // Left edge
         std::list<std::list<int>>::iterator i = R.chainCode[3].begin();
         std::advance(i, (int)p.y-R.tl.y);
         if( insert_chainCode(*i, iSplit, iCtn, iCtr) )
             return;
     }
     DPoint q = cc.mme_br(p);
-    if(p.x == R.br.x) { // Right edge
+    if(q.x == R.br.x && iSideExclude!=1) { // Right edge
         std::list<std::list<int>>::iterator i = R.chainCode[1].begin();
         std::advance(i, (int)p.y-R.tl.y);
         if( insert_chainCode(*i, iSplit, iCtn, iCtr) )
@@ -222,8 +223,8 @@ void propagate(CC& cc, Rect& R1, Rect& R2, Pos sep,
     int ic2 = cc.root_continuum(*i2++);
     int j1 = cc.root_contour(*i1++);
     int j2 = cc.root_contour(*i2++);
-    int l1 = cc.contours[j1].lvl;
-    int l2 = cc.contours[j2].lvl;
+    float l1 = cc.contours[j1].lvl;
+    float l2 = cc.contours[j2].lvl;
     do {
         if(l1 == l2) {
             if(j1 != j2)
@@ -236,12 +237,12 @@ void propagate(CC& cc, Rect& R1, Rect& R2, Pos sep,
             }
         } else if(l1<l2) { // split continuum ic2
             cc.merge_mme(cc.continua[ic1].mme, cc.continua[ic2].mme, sep);
-            split_continuum(cc, R2, ic2, ic1, j1);
+            split_continuum(cc, R2, ic2, ic1, j1, 3);
         } else if(l2<l1) { // split continuum ic1
             cc.merge_mme(cc.continua[ic2].mme, cc.continua[ic1].mme, sep);
-            split_continuum(cc, R1, ic1, ic2, j2);
+            split_continuum(cc, R1, ic1, ic2, j2, 1);
         }
-        int l1old=l1;
+        float l1old=l1;
         if(l1old <= l2) {
             if(i1!=L1.end()) {
                 ic1 = cc.root_continuum(*i1++);
@@ -258,7 +259,15 @@ void propagate(CC& cc, Rect& R1, Rect& R2, Pos sep,
                 l2 = cc.contours[j2].lvl;
             }
         }
-    } while(i1!=L1.end() && i2!=L2.end());
+    } while(i1!=L1.end() || i2!=L2.end());
+    ic1 = cc.root_continuum(ic1);
+    ic2 = cc.root_continuum(ic2);
+    if(ic1!=ic2) {
+      cc.merge_mme(cc.continua[ic1].mme, cc.continua[ic2].mme, sep);
+      cc.continua[ic2].parent = ic1;
+      cc.continua[ic2].mme.clear();
+      cc.continua[ic2].mme.shrink_to_fit();
+    }
 }
 
 /// Merge two adjacent rectangles, separated by vertical edges.
@@ -333,7 +342,7 @@ Pos CC::create_saddle(Pos p, float lvl[4]) {
     p.y += h;
     int i = idx(p);
     Contour& c = contours[i];
-    float num=   lvl[0]*lvl[2] - lvl[1]+lvl[3];
+    float num=   lvl[0]*lvl[2] - lvl[1]*lvl[3];
     float denom=(lvl[0]+lvl[2])-(lvl[1]+lvl[3]);
     c.p.x = (lvl[0]-lvl[1])/denom;
     c.p.y = (lvl[0]-lvl[3])/denom;
@@ -390,5 +399,5 @@ int CC::root_continuum(int i) {
     int j=continua[i].parent;
     if(j<0)
         return i;
-    return (continua[j].parent = root_continuum(j));
+    return (continua[i].parent = root_continuum(j));
 }
