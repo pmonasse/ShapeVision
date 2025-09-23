@@ -56,7 +56,7 @@ Rect::Rect(CC& cc, Pos p, float lvl[4]) : tl(p), br(p.x+1,p.y+1) {
             Pos s=cc.create_saddle(p, lvl);
             int idx=cc.idx(s);
             Contour& ctr = cc.contours[idx];
-	    ctr.p.x += p.x; ctr.p.y += p.y;
+            ctr.p.x += p.x; ctr.p.y += p.y;
             for(int i=0; i<4; i++) {
                 DPoint p = min(pos2DPoint(vo[i]),ctr.p);
                 c[i] = cc.create_continuum(vo[i], s, p);
@@ -174,29 +174,29 @@ bool insert_chainCode(std::list<int>& L, int iSplit, int iCtn, int iCtr) {
 /// with delimiting contour \a iCtr. Insert these in the chain-code at the exit
 /// edge (last MME). The side \a iSideExclude (0..3) must be skipped.
 void split_continuum(CC& cc, Rect& R, int iSplit, int iCtn, int iCtr,
-		     int iSideExclude) {
+                     int iSideExclude) {
     cc.continua[iSplit].infCtr = iCtr;
     const DPoint& p = cc.continua[iSplit].mme.back();
-    if(p.y == R.tl.y) { // Upper edge
+    if(iSideExclude != 0 && p.y == R.tl.y) { // Upper edge
         std::list<std::list<int>>::iterator i = R.chainCode[0].begin();
         std::advance(i, (int)p.x-R.tl.x);
         if( insert_chainCode(*i, iSplit, iCtn, iCtr) )
             return;
     }
-    if(p.x == R.tl.x && iSideExclude!=3) { // Left edge
+    if(iSideExclude!=3 && p.x == R.tl.x) { // Left edge
         std::list<std::list<int>>::iterator i = R.chainCode[3].begin();
         std::advance(i, (int)p.y-R.tl.y);
         if( insert_chainCode(*i, iSplit, iCtn, iCtr) )
             return;
     }
     DPoint q = cc.mme_br(p);
-    if(q.x == R.br.x && iSideExclude!=1) { // Right edge
+    if(iSideExclude != 1 && q.x == R.br.x) { // Right edge
         std::list<std::list<int>>::iterator i = R.chainCode[1].begin();
         std::advance(i, (int)p.y-R.tl.y);
         if( insert_chainCode(*i, iSplit, iCtn, iCtr) )
             return;
     }
-    if(q.y == R.br.y) { // Bottom edge
+    if(iSideExclude != 2 && q.y == R.br.y) { // Bottom edge
         std::list<std::list<int>>::iterator i = R.chainCode[2].begin();
         std::advance(i, (int)p.x-R.tl.x);
         if( insert_chainCode(*i, iSplit, iCtn, iCtr) )
@@ -206,9 +206,10 @@ void split_continuum(CC& cc, Rect& R, int iSplit, int iCtn, int iCtr,
 }
 
 /// Given two chain-codes \a L1 and \a L2 along a common edge, merge or split
-/// continua, merge contours. The vertical common edge has top at \a sep. The
-/// enclosing rectangles \a R1 and \a R2 are horizontally adjacent.
-void propagate(CC& cc, Rect& R1, Rect& R2, Pos sep,
+/// continua, merge contours. The vertical common edge has top-left endpoint
+/// at \a sep and orientation \a o (1=horizontal, 0=vertical). The
+/// enclosing rectangles \a R1 and \a R2 are adjacent.
+void propagate(CC& cc, Rect& R1, Rect& R2, Pos sep, int o,
                const std::list<int>& L1, const std::list<int>& L2) {
     assert(!L1.empty() && !L2.empty());
     assert(L1.back()==L2.back());
@@ -230,17 +231,17 @@ void propagate(CC& cc, Rect& R1, Rect& R2, Pos sep,
             if(j1 != j2)
                 cc.contours[j2].parent = j1;
             if(ic1 != ic2) {
-                cc.merge_mme(cc.continua[ic1].mme, cc.continua[ic2].mme, sep);
+                cc.merge_mme(cc.continua[ic1].mme, cc.continua[ic2].mme, sep,o);
                 cc.continua[ic2].parent = ic1;
                 cc.continua[ic2].mme.clear();
                 cc.continua[ic2].mme.shrink_to_fit();
             }
         } else if(l1<l2) { // split continuum ic2
-            cc.merge_mme(cc.continua[ic1].mme, cc.continua[ic2].mme, sep);
-            split_continuum(cc, R2, ic2, ic1, j1, 3);
+            cc.merge_mme(cc.continua[ic1].mme, cc.continua[ic2].mme, sep,o);
+            split_continuum(cc, R2, ic2, ic1, j1, (o+3)%4);
         } else if(l2<l1) { // split continuum ic1
-            cc.merge_mme(cc.continua[ic2].mme, cc.continua[ic1].mme, sep);
-            split_continuum(cc, R1, ic1, ic2, j2, 1);
+            cc.merge_mme(cc.continua[ic2].mme, cc.continua[ic1].mme, sep,o);
+            split_continuum(cc, R1, ic1, ic2, j2, o+1);
         }
         float l1old=l1;
         if(l1old <= l2) {
@@ -263,7 +264,7 @@ void propagate(CC& cc, Rect& R1, Rect& R2, Pos sep,
     ic1 = cc.root_continuum(ic1);
     ic2 = cc.root_continuum(ic2);
     if(ic1!=ic2) {
-      cc.merge_mme(cc.continua[ic1].mme, cc.continua[ic2].mme, sep);
+        cc.merge_mme(cc.continua[ic1].mme, cc.continua[ic2].mme, sep,o);
       cc.continua[ic2].parent = ic1;
       cc.continua[ic2].mme.clear();
       cc.continua[ic2].mme.shrink_to_fit();
@@ -271,27 +272,33 @@ void propagate(CC& cc, Rect& R1, Rect& R2, Pos sep,
 }
 
 /// Merge two adjacent rectangles, separated by vertical edges.
-Rect merge_horizontal(CC& cc, Rect& R1, Rect& R2) {
-    assert(Pos(R1.br.x,R1.tl.y) == R2.tl); // tr(R1)=tl(R2)
-    assert(R1.br == Pos(R2.tl.x,R2.br.y)); // br(R1)=bl(R2)
+Rect merge_rectangles(CC& cc, Rect& R1, Rect& R2) {
+    int o = -1; // Relative orientation of R1 and R2. 0,1=horizontal,vertical
+    if(R1.tl.x == R2.tl.x)
+        o=1; // Vertical neighbors, horizontal edges
+    if(R1.tl.y == R2.tl.y)
+        o=0; // Horizontal edges, vertical neighbors
+    assert(o==0 || o==1);
+    int oo = 1-o; // Opposite edge
+    int o1=o+1, o2=(o1+2)%4;
 
     // Propagate chain-codes along common edges
-    assert(R1.chainCode[1].size()==R2.chainCode[3].size());
-    std::list<std::list<int>>::const_iterator i1=R1.chainCode[1].begin(),
-                                              i2=R2.chainCode[3].begin(),
-                                              end=R1.chainCode[1].end();
+    assert(R1.chainCode[o1].size()==R2.chainCode[o2].size());
+    std::list<std::list<int>>::const_iterator i1=R1.chainCode[o1].begin(),
+                                              i2=R2.chainCode[o2].begin(),
+                                              end=R1.chainCode[o1].end();
     Pos sep = R2.tl;
-    for(; i1!=end; ++i1, ++i2, ++sep.y)
-        propagate(cc, R1, R2, sep, *i1, *i2);
+    for(; i1!=end; ++i1, ++i2, ++sep[oo])
+        propagate(cc, R1, R2, sep, o, *i1, *i2);
 
     // Move chain-codes at frame of R
     Rect R(R1.tl, R2.br);
-    std::swap(R1.chainCode[0],R.chainCode[0]);
-    R.chainCode[0].splice(R.chainCode[0].end(),R2.chainCode[0]);
-    std::swap(R1.chainCode[2],R.chainCode[2]);
-    R.chainCode[2].splice(R.chainCode[2].end(),R2.chainCode[2]);
-    std::swap(R1.chainCode[3],R.chainCode[3]);
-    std::swap(R2.chainCode[1],R.chainCode[1]);
+    std::swap(R1.chainCode[o2],R.chainCode[o2]);
+    std::swap(R2.chainCode[o1],R.chainCode[o1]);
+    std::swap(R1.chainCode[o],R.chainCode[o]);
+    R.chainCode[o].splice(R.chainCode[o].end(),R2.chainCode[o]);
+    std::swap(R1.chainCode[oo],R.chainCode[oo]);
+    R.chainCode[oo].splice(R.chainCode[oo].end(),R2.chainCode[oo]);
     return R;
 }
 
@@ -315,14 +322,28 @@ CC::CC(const float* im, int w, int h): w(w), h(h) {
     while(w2>1 || h2>1) {
         // Horizontal propagation
         size_t n=R.size();
-        for(int i=0; i<h2; i++)
+        for(int i=0; i<h2; i++) {
             for(int j=0; j+1<w2; j+=2) {
-                Rect r = merge_horizontal(*this, R[i*h2+j], R[i*h2+j+1]);
+                Rect r = merge_rectangles(*this, R[i*h2+j], R[i*h2+j+1]);
                 R.push_back(r);
             }
+            if(w2&1)
+                R.push_back(R[i*h2+w2-1]);
+        }
         R.erase(R.begin(), R.begin()+n);
         w2=(w2+1)/2;
-        // Vertical propagation: TODO
+        // Vertical propagation
+        n = R.size();
+        for(int i=0; i+1<h2; i+=2) {
+            for(int j=0; j<w2; j++) {
+                Rect r = merge_rectangles(*this, R[i*h2+j], R[(i+1)*h2+j]);
+                R.push_back(r);
+            }
+        }
+        if(h2&1)
+            for(int j=0; j<w2; j++)
+                R.push_back(R[(h2-1)*w2+j]);
+        R.erase(R.begin(), R.begin()+n);
         h2=(h2+1)/2;
     }
 }
@@ -382,14 +403,17 @@ int CC::root_contour(int i) {
 
 /// When two continua meeting along vertical edge of top \a sep have mme
 /// \a v1 and \a v2, append v2 \a v1. They may have to be reordered so that
-/// the edge is no longer a boundary.
-void CC::merge_mme(std::vector<DPoint>& v1, std::vector<DPoint>& v2, Pos sep) {
+/// the edge is no longer a boundary. The orientation of the edge is given by
+/// o (0=vertical, 1=horizontal).
+void CC::merge_mme(std::vector<DPoint>& v1, std::vector<DPoint>& v2,
+                   Pos sep, int o) {
+    int oo=1-o;
     const DPoint& p = v1.front();
-    if((int)p.y==sep.y && (int)p.x+1==sep.x &&
-       (p.x!=(int)p.x || contours[idx(Pos((int)p.x,(int)p.y+h))].p.x<0)) 
+    if((int)p[o]==sep[o] && (int)p[oo]+1==sep[oo] &&
+       (p[oo]!=(int)p[oo] || contours[idx(Pos((int)p.x,(int)p.y+h))].p.x<0)) 
         reverse(v1.begin(), v1.end());
     const DPoint& q = v2.back();
-    if((int)q.y==sep.y && (int)q.x==sep.x && q.x==(int)q.x)
+    if((int)q[o]==sep[o] && (int)q[oo]==sep[oo] && q[oo]==(int)q[oo])
         reverse(v2.begin(), v2.end());
     v1.insert(v1.end(), v2.begin(), v2.end());
 }

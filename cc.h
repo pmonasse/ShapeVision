@@ -18,6 +18,8 @@ struct Point {
     Point(T x0, T y0): x(x0), y(y0) {}
     bool operator==(const Point& p) const { return x==p.x && y==p.y; }
     bool operator!=(const Point& p) const { return !(*this == p); }
+    T& operator[](int i)       { return i==0? x: y; }
+    T  operator[](int i) const { return i==0? x: y; }
 };
 
 typedef Point<double> DPoint;
@@ -55,7 +57,8 @@ struct CC {
     int root_contour(int i);
     int root_contour(Pos c) { return root_contour(idx(c)); }
 
-    void merge_mme(std::vector<DPoint>& v1, std::vector<DPoint>& v2, Pos sep);
+    void merge_mme(std::vector<DPoint>& v1, std::vector<DPoint>& v2,
+                   Pos sep, int o);
     int root_continuum(int i);
 };
 
