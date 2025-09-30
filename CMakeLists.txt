@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.13)
 project(ShapeVision)
 
+set(CMAKE_CXX_STANDARD 11)
+
 find_package(PNG)
 if(NOT PNG_FOUND)
   find_package(ZLIB) # zlib is needed by libPNG
