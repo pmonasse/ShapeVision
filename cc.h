@@ -57,9 +57,12 @@ struct CC {
     int root_contour(int i);
     int root_contour(Pos c) { return root_contour(idx(c)); }
 
-    void merge_mme(std::vector<DPoint>& v1, std::vector<DPoint>& v2,
-                   Pos sep, int o);
+    std::vector<DPoint>::iterator
+    merge_mme(std::vector<DPoint>& v1, std::vector<DPoint>& v2,
+              Pos sep, int o);
     int root_continuum(int i);
+private:
+    int adjacent_rect(const DPoint& p, Pos sep, int o) const;
 };
 
 #endif

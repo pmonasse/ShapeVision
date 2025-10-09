@@ -65,7 +65,7 @@ Rect::Rect(CC& cc, Pos p, float lvl[4]) : tl(p), br(p.x+1,p.y+1) {
                 for(int j=2; j<=3; j++) {
                     int eid = edge_id(rank[i],rank[j]);
                     chainCode[eid].push_back(
-                     std::list<int>{cc.idx(vo[i]),c[i],idx,c[j],cc.idx(vo[j])});
+                     std::list<int>{cc.root_contour(vo[i]),c[i],idx,c[j],cc.root_contour(vo[j])});
                 }
             return;
         }
@@ -80,48 +80,48 @@ Rect::Rect(CC& cc, Pos p, float lvl[4]) : tl(p), br(p.x+1,p.y+1) {
 
     DPoint dtl = pos2DPoint(tl);
     int eMin = edge_id(rank[0], rank[1]);
-    chainCode[eMin].back().push_back(cc.idx(vo[0]));
+    chainCode[eMin].back().push_back(cc.root_contour(vo[0]));
     if(lvl[rank[0]]==lvl[rank[1]])
         cc.merge_contours(vo[0],vo[1]);
     else {
         c[0] = cc.create_continuum(vo[0],vo[1], dtl);
         chainCode[eMin].back().push_back(c[0]);
-        chainCode[eMin].back().push_back(cc.idx(vo[1]));
+        chainCode[eMin].back().push_back(cc.root_contour(vo[1]));
     }
 
     int eMax = edge_id(rank[2], rank[3]);
-    chainCode[eMax].back().push_back(cc.idx(vo[2]));
+    chainCode[eMax].back().push_back(cc.root_contour(vo[2]));
     if(lvl[rank[2]]==lvl[rank[3]])
         cc.merge_contours(vo[2],vo[3]);
     else {
         c[1] = cc.create_continuum(vo[2],vo[3], dtl);
         chainCode[eMax].back().push_back(c[1]);
-        chainCode[eMax].back().push_back(cc.idx(vo[3]));
+        chainCode[eMax].back().push_back(cc.root_contour(vo[3]));
     }
 
     if((rank[1]+rank[2])&1) { // two adjacent intermediate level vertices
         int eInt = edge_id(rank[1],rank[2]); // intermediate edge
-        chainCode[eInt].back().push_back(cc.idx(vo[1]));
+        chainCode[eInt].back().push_back(cc.root_contour(vo[1]));
         if(lvl[rank[1]]==lvl[rank[2]])
             cc.merge_contours(vo[1],vo[2]);
         else {
             c[2] = cc.create_continuum(vo[1],vo[2], dtl);
             chainCode[eInt].back().push_back(c[2]);
-            chainCode[eInt].back().push_back(cc.idx(vo[2]));
+            chainCode[eInt].back().push_back(cc.root_contour(vo[2]));
         }
         int eMm = (eInt+2)%4; // opposite edge, linking min and max
-        chainCode[eMm].back().push_back(cc.idx(vo[0]));
+        chainCode[eMm].back().push_back(cc.root_contour(vo[0]));
         if(c[0]>=0) {
             chainCode[eMm].back().push_back(c[0]);
-            chainCode[eMm].back().push_back(cc.idx(vo[1]));
+            chainCode[eMm].back().push_back(cc.root_contour(vo[1]));
         }
         if(c[2]>=0) {
             chainCode[eMm].back().push_back(c[2]);
-            chainCode[eMm].back().push_back(cc.idx(vo[2]));
+            chainCode[eMm].back().push_back(cc.root_contour(vo[2]));
         }
         if(c[1]>=0) {
             chainCode[eMm].back().push_back(c[1]);
-            chainCode[eMm].back().push_back(cc.idx(vo[3]));
+            chainCode[eMm].back().push_back(cc.root_contour(vo[3]));
         }
     } else { // opposite intermediate level vertices
         if(lvl[rank[1]] == lvl[rank[2]])
@@ -129,28 +129,28 @@ Rect::Rect(CC& cc, Pos p, float lvl[4]) : tl(p), br(p.x+1,p.y+1) {
         else
             c[2] = cc.create_continuum(vo[1],vo[2], dtl);
         int e02 = edge_id(rank[0],rank[2]);
-        chainCode[e02].back().push_back(cc.idx(vo[0]));
+        chainCode[e02].back().push_back(cc.root_contour(vo[0]));
         if(lvl[rank[0]] == lvl[rank[2]])
             cc.merge_contours(vo[0],vo[2]);
         else {
             if(c[0]>=0) {
                 chainCode[e02].back().push_back(c[0]);
-                chainCode[e02].back().push_back(cc.idx(vo[1]));
+                chainCode[e02].back().push_back(cc.root_contour(vo[1]));
             }
             if(c[2]>=0) {
                 chainCode[e02].back().push_back(c[2]);
-                chainCode[e02].back().push_back(cc.idx(vo[2]));
+                chainCode[e02].back().push_back(cc.root_contour(vo[2]));
             }
         }
         int e13 = (e02+2)%4;
-        chainCode[e13].back().push_back(cc.idx(vo[1]));
+        chainCode[e13].back().push_back(cc.root_contour(vo[1]));
         if(c[2]>=0) {
             chainCode[e13].back().push_back(c[2]);
-            chainCode[e13].back().push_back(cc.idx(vo[2]));
+            chainCode[e13].back().push_back(cc.root_contour(vo[2]));
         }
         if(c[1]>=0) {
             chainCode[e13].back().push_back(c[1]);
-            chainCode[e13].back().push_back(cc.idx(vo[3]));
+            chainCode[e13].back().push_back(cc.root_contour(vo[3]));
         }
     }
 }
@@ -159,50 +159,104 @@ Rect::Rect(CC& cc, Pos p, float lvl[4]) : tl(p), br(p.x+1,p.y+1) {
 /// present at most once. Insert before the continuum \a iCtn and the contour
 /// \a iCtr. This is used during propagation of continua and contour when
 /// splitting a continuum.
-bool insert_chainCode(std::list<int>& L, int iSplit, int iCtn, int iCtr) {
+bool insert_chainCode(CC& cc, std::list<int>& L, int iSplit, int iCtn, int iCtr) {
+    assert(L.size()&1);
     std::list<int>::iterator it = L.begin();
-    for(++it; it!=L.end(); advance(it,2))
+    for(++it; it!=L.end(); advance(it,2)) {
+        *it = cc.root_continuum(*it);
         if(*it == iSplit) {
             L.insert(it, iCtn);
             L.insert(it, iCtr);
             return true;
         }
+    }
     return false;
 }
 
-/// The continuum of index \a iSplit must be split by the continuum \a iCtn
-/// with delimiting contour \a iCtr. Insert these in the chain-code at the exit
-/// edge (last MME). The side \a iSideExclude (0..3) must be skipped.
-void split_continuum(CC& cc, Rect& R, int iSplit, int iCtn, int iCtr,
-                     int iSideExclude) {
-    cc.continua[iSplit].infCtr = iCtr;
+/// Mark continuum \a iCtn and contour \a iCtr crossing the continuum of index
+/// \a iSplit. This is for the exit edge of the last mme of \a iSplit out of
+/// \a R. The side \a iSideIn (0..3), representing entry edge, must be skipped
+/// from the search of exit edge.
+void mark_exit(CC& cc, Rect& R, int iSplit, int iCtn, int iCtr, int iSideIn) {
     const DPoint& p = cc.continua[iSplit].mme.back();
-    if(iSideExclude != 0 && p.y == R.tl.y) { // Upper edge
+    if(iSideIn != 0 && p.y == R.tl.y) { // Upper edge
         std::list<std::list<int>>::iterator i = R.chainCode[0].begin();
         std::advance(i, (int)p.x-R.tl.x);
-        if( insert_chainCode(*i, iSplit, iCtn, iCtr) )
+        if( insert_chainCode(cc, *i, iSplit, iCtn, iCtr) )
             return;
     }
-    if(iSideExclude!=3 && p.x == R.tl.x) { // Left edge
+    if(iSideIn != 3 && p.x == R.tl.x) { // Left edge
         std::list<std::list<int>>::iterator i = R.chainCode[3].begin();
         std::advance(i, (int)p.y-R.tl.y);
-        if( insert_chainCode(*i, iSplit, iCtn, iCtr) )
+        if( insert_chainCode(cc, *i, iSplit, iCtn, iCtr) )
             return;
     }
     DPoint q = cc.mme_br(p);
-    if(iSideExclude != 1 && q.x == R.br.x) { // Right edge
+    if(iSideIn != 1 && q.x == R.br.x) { // Right edge
         std::list<std::list<int>>::iterator i = R.chainCode[1].begin();
         std::advance(i, (int)p.y-R.tl.y);
-        if( insert_chainCode(*i, iSplit, iCtn, iCtr) )
+        if( insert_chainCode(cc, *i, iSplit, iCtn, iCtr) )
             return;
     }
-    if(iSideExclude != 2 && q.y == R.br.y) { // Bottom edge
+    if(iSideIn != 2 && q.y == R.br.y) { // Bottom edge
         std::list<std::list<int>>::iterator i = R.chainCode[2].begin();
         std::advance(i, (int)p.x-R.tl.x);
-        if( insert_chainCode(*i, iSplit, iCtn, iCtr) )
+        if( insert_chainCode(cc, *i, iSplit, iCtn, iCtr) )
             return;
     }
     assert(false);
+}
+
+/// Check if m<n=i or n<m=i.
+bool inside(short int i, short int m, short int n) {
+    if(m>n)
+       std::swap(m,n);
+    return (m<i && i==n);
+}
+
+/// Given two adjacent mme, return the side of edge of \a dst that
+/// was crossed when coming from \a src.
+int find_side_entry(const DPoint& src, const DPoint& dst) {
+  if(src.x!=dst.x)
+    return 2+((int)dst.x-(int)src.x);
+  return 1-((int)dst.y-(int)src.y);
+}
+
+/// The continuum of index \a iSplit must be split by the continuum \a iCtn
+/// with delimiting contour \a iCtr. The side \a iSideIn (0..3) is the entry
+/// direction. \a it points to the mme of entry.
+/// All crossings through edges at the same level as \a sep are recorded in
+/// the chain codes.
+void split_continuum(CC& cc, Rect& Rsrc, Rect& Rdst,
+                     std::vector<DPoint>::iterator it, Pos sep,
+                     int iSplit, int iCtn, int iCtr, int iSideIn) {
+    cc.continua[iSplit].infCtr = iCtr;
+    const DPoint& p = *it;
+    const int dir = iSideIn&1; // adjacency of rects: 0=horizontal, 1=vertical
+    std::list<std::list<int>>::iterator i = Rdst.chainCode[iSideIn].begin();
+    std::advance(i, (int)p[dir]-Rdst.tl[dir]);
+    bool b = insert_chainCode(cc, *i, iSplit, iCtn, iCtr);
+    (void)b; assert(b);
+    Rect* R[2] = {&Rsrc, &Rdst};
+    int ori[2] = {(iSideIn+2)%4, iSideIn};
+    int side=1;
+    std::vector<DPoint>::iterator itn=std::next(it),
+      end=cc.continua[iCtn].mme.end();
+    int dim=1-dir, lim=sep[dim];
+    for(; itn!=end; it=itn++)
+        if(inside(lim, (*it)[dim], (*itn)[dim])) { // Crossing
+           i = R[side]->chainCode[ori[side]].begin();
+           std::advance(i, (int)(*it)[dir]-Rsrc.tl[dir]);
+           bool b = insert_chainCode(cc, *i, iSplit, iCtn, iCtr);
+           (void)b; assert(b);
+           side = 1-side;
+           i = R[side]->chainCode[ori[side]].begin();
+           std::advance(i, (int)(*it)[dir]-Rsrc.tl[dir]);
+           b = insert_chainCode(cc, *i, iSplit, iCtn, iCtr);
+           (void)b; assert(b);
+        }
+    iSideIn = find_side_entry(*std::prev(it), *it);
+    mark_exit(cc, *R[side], iSplit, iCtn, iCtr, iSideIn);
 }
 
 /// Given two chain-codes \a L1 and \a L2 along a common edge, merge or split
@@ -212,7 +266,6 @@ void split_continuum(CC& cc, Rect& R, int iSplit, int iCtn, int iCtr,
 void propagate(CC& cc, Rect& R1, Rect& R2, Pos sep, int o,
                const std::list<int>& L1, const std::list<int>& L2) {
     assert(!L1.empty() && !L2.empty());
-    assert(L1.back()==L2.back());
     std::list<int>::const_iterator i1=L1.begin(), i2=L2.begin();
     assert(*i1 == *i2);
     ++i1; ++i2;
@@ -220,6 +273,7 @@ void propagate(CC& cc, Rect& R1, Rect& R2, Pos sep, int o,
         assert(i2 == L2.end());
         return;
     }
+    std::vector<DPoint>::iterator it;
     int ic1 = cc.root_continuum(*i1++);
     int ic2 = cc.root_continuum(*i2++);
     int j1 = cc.root_contour(*i1++);
@@ -237,11 +291,11 @@ void propagate(CC& cc, Rect& R1, Rect& R2, Pos sep, int o,
                 cc.continua[ic2].mme.shrink_to_fit();
             }
         } else if(l1<l2) { // split continuum ic2
-            cc.merge_mme(cc.continua[ic1].mme, cc.continua[ic2].mme, sep,o);
-            split_continuum(cc, R2, ic2, ic1, j1, (o+3)%4);
+            it= cc.merge_mme(cc.continua[ic1].mme, cc.continua[ic2].mme, sep,o);
+            split_continuum(cc, R1, R2, it, sep, ic2, ic1, j1, (o+3)%4);
         } else if(l2<l1) { // split continuum ic1
-            cc.merge_mme(cc.continua[ic2].mme, cc.continua[ic1].mme, sep,o);
-            split_continuum(cc, R1, ic1, ic2, j2, o+1);
+            it= cc.merge_mme(cc.continua[ic2].mme, cc.continua[ic1].mme, sep,o);
+            split_continuum(cc, R2, R1, it, sep, ic1, ic2, j2, o+1);
         }
         float l1old=l1;
         if(l1old <= l2) {
@@ -265,9 +319,9 @@ void propagate(CC& cc, Rect& R1, Rect& R2, Pos sep, int o,
     ic2 = cc.root_continuum(ic2);
     if(ic1!=ic2) {
         cc.merge_mme(cc.continua[ic1].mme, cc.continua[ic2].mme, sep,o);
-      cc.continua[ic2].parent = ic1;
-      cc.continua[ic2].mme.clear();
-      cc.continua[ic2].mme.shrink_to_fit();
+        cc.continua[ic2].parent = ic1;
+        cc.continua[ic2].mme.clear();
+        cc.continua[ic2].mme.shrink_to_fit();
     }
 }
 
@@ -279,7 +333,6 @@ Rect merge_rectangles(CC& cc, Rect& R1, Rect& R2) {
     if(R1.tl.y == R2.tl.y)
         o=0; // Horizontal edges, vertical neighbors
     assert(o==0 || o==1);
-    int oo = 1-o; // Opposite edge
     int o1=o+1, o2=(o1+2)%4;
 
     // Propagate chain-codes along common edges
@@ -288,7 +341,7 @@ Rect merge_rectangles(CC& cc, Rect& R1, Rect& R2) {
                                               i2=R2.chainCode[o2].begin(),
                                               end=R1.chainCode[o1].end();
     Pos sep = R2.tl;
-    for(; i1!=end; ++i1, ++i2, ++sep[oo])
+    for(; i1!=end; ++i1, ++i2, ++sep[1-o])
         propagate(cc, R1, R2, sep, o, *i1, *i2);
 
     // Move chain-codes at frame of R
@@ -297,8 +350,9 @@ Rect merge_rectangles(CC& cc, Rect& R1, Rect& R2) {
     std::swap(R2.chainCode[o1],R.chainCode[o1]);
     std::swap(R1.chainCode[o],R.chainCode[o]);
     R.chainCode[o].splice(R.chainCode[o].end(),R2.chainCode[o]);
-    std::swap(R1.chainCode[oo],R.chainCode[oo]);
-    R.chainCode[oo].splice(R.chainCode[oo].end(),R2.chainCode[oo]);
+    o += 2;
+    std::swap(R1.chainCode[o],R.chainCode[o]);
+    R.chainCode[o].splice(R.chainCode[o].end(),R2.chainCode[o]);
     return R;
 }
 
@@ -324,11 +378,11 @@ CC::CC(const float* im, int w, int h): w(w), h(h) {
         size_t n=R.size();
         for(int i=0; i<h2; i++) {
             for(int j=0; j+1<w2; j+=2) {
-                Rect r = merge_rectangles(*this, R[i*h2+j], R[i*h2+j+1]);
+                Rect r = merge_rectangles(*this, R[i*w2+j], R[i*w2+j+1]);
                 R.push_back(r);
             }
             if(w2&1)
-                R.push_back(R[i*h2+w2-1]);
+                R.push_back(R[i*w2+w2-1]);
         }
         R.erase(R.begin(), R.begin()+n);
         w2=(w2+1)/2;
@@ -336,7 +390,7 @@ CC::CC(const float* im, int w, int h): w(w), h(h) {
         n = R.size();
         for(int i=0; i+1<h2; i+=2) {
             for(int j=0; j<w2; j++) {
-                Rect r = merge_rectangles(*this, R[i*h2+j], R[(i+1)*h2+j]);
+                Rect r = merge_rectangles(*this, R[i*w2+j], R[(i+1)*w2+j]);
                 R.push_back(r);
             }
         }
@@ -375,7 +429,7 @@ Pos CC::create_saddle(Pos p, float lvl[4]) {
 /// Return an identifier (index in array) for the continuum.
 int CC::create_continuum(Pos inf, Pos sup, const DPoint& p) {
     int i=(int)continua.size();
-    int j=idx(inf), k=idx(sup);
+    int j=root_contour(inf), k=root_contour(sup);
     if(contours[j].lvl > contours[k].lvl)
         std::swap(j,k);
     Continuum c(j,k);
@@ -401,21 +455,34 @@ int CC::root_contour(int i) {
     return (contours[i].parent = root_contour(j));
 }
 
-/// When two continua meeting along vertical edge of top \a sep have mme
+/// Check whether dual pixel of top-left corner \a p is adjacent to edge of
+/// top-left corner \a sep and orientation \a o (0=vertical, 1=horizontal).
+int CC::adjacent_rect(const DPoint& p, Pos sep, int o) const {
+    int oo=1-o;
+    if((int)p[oo]==sep[oo] && (int)p[o]+1==sep[o] &&
+       (p[o]!=(int)p[o] || contours[idx(Pos((int)p.x,(int)p.y+h))].p.x<0))
+        return -1; // p above sep
+    if((int)p[oo]==sep[oo] && (int)p[o]==sep[o] && p[o]==(int)p[o])
+        return 1; // p below sep
+    return 0;
+}
+
+/// When two continua meeting along edge of top-left \a sep have mme
 /// \a v1 and \a v2, append v2 \a v1. They may have to be reordered so that
 /// the edge is no longer a boundary. The orientation of the edge is given by
 /// o (0=vertical, 1=horizontal).
-void CC::merge_mme(std::vector<DPoint>& v1, std::vector<DPoint>& v2,
-                   Pos sep, int o) {
-    int oo=1-o;
+/// Return iterator to the first element of junction.
+std::vector<DPoint>::iterator
+CC::merge_mme(std::vector<DPoint>& v1, std::vector<DPoint>& v2, Pos sep, int o) {
     const DPoint& p = v1.front();
-    if((int)p[o]==sep[o] && (int)p[oo]+1==sep[oo] &&
-       (p[oo]!=(int)p[oo] || contours[idx(Pos((int)p.x,(int)p.y+h))].p.x<0)) 
+    if(adjacent_rect(p, sep, o))
         reverse(v1.begin(), v1.end());
+    int n = v1.size();
     const DPoint& q = v2.back();
-    if((int)q[o]==sep[o] && (int)q[oo]==sep[oo] && q[oo]==(int)q[oo])
+    if(adjacent_rect(q, sep, o))
         reverse(v2.begin(), v2.end());
     v1.insert(v1.end(), v2.begin(), v2.end());
+    return v1.begin()+n;
 }
 
 /// Find the canonical contour and perform path compression.
