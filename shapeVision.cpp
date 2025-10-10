@@ -33,7 +33,7 @@ int main(int argc, char* argv[]) {
         std::cerr << "Error: " << s << std::endl;
         return 1;
     }
-    if(argc != 4) {
+    if(argc != 2) {
         cerr << "Usage: " << argv[0] << " [options] imgIn.png\n"
              << cmd;
         return 1;
@@ -45,6 +45,8 @@ int main(int argc, char* argv[]) {
         cerr << "Unable to load image " << argv[1] << endl;
         return 1;
     }
+
+    CC cc(im,(int)w,(int)h); // Will do someghing with it later...
 
     free(im);
     return 0;
