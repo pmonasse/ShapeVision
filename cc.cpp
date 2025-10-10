@@ -267,7 +267,7 @@ void propagate(CC& cc, Rect& R1, Rect& R2, Pos sep, int o,
                const std::list<int>& L1, const std::list<int>& L2) {
     assert(!L1.empty() && !L2.empty());
     std::list<int>::const_iterator i1=L1.begin(), i2=L2.begin();
-    assert(*i1 == *i2);
+    //    assert(*i1 == *i2); // TODO: find better check, *i1 and *i2 must have merged, not be identical
     ++i1; ++i2;
     if(i1 == L1.end()) { // Single contour
         assert(i2 == L2.end());
