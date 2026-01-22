@@ -46,7 +46,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    CC cc(im,(int)w,(int)h); // Will do someghing with it later...
+    CC cc(im,(int)w,(int)h); // Will do something with it later...
 
     free(im);
     return 0;
