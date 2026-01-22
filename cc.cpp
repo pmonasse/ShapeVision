@@ -217,7 +217,7 @@ bool inside(short int i, short int m, short int n) {
 /// Given two adjacent mme, return the side of edge of \a dst that
 /// was crossed when coming from \a src.
 int find_side_entry(const DPoint& src, const DPoint& dst) {
-  if(src.x!=dst.x)
+    if((int)src.x!=(int)dst.x)
     return 2+((int)dst.x-(int)src.x);
   return 1-((int)dst.y-(int)src.y);
 }
@@ -468,7 +468,7 @@ int CC::adjacent_rect(const DPoint& p, Pos sep, int o) const {
 }
 
 /// When two continua meeting along edge of top-left \a sep have mme
-/// \a v1 and \a v2, append v2 \a v1. They may have to be reordered so that
+/// \a v1 and \a v2, append v2 to \a v1. They may have to be reordered so that
 /// the edge is no longer a boundary. The orientation of the edge is given by
 /// o (0=vertical, 1=horizontal).
 /// Return iterator to the first element of junction.
