@@ -55,103 +55,91 @@ Rect::Rect(CC& cc, Pos p, float lvl[4]) : tl(p), br(p.x+1,p.y+1) {
         if(lvl[rank[1]] < lvl[rank[2]]) { // Saddle
             Pos s=cc.create_saddle(p, lvl);
             int idx=cc.idx(s);
-            Contour& ctr = cc.contours[idx];
-            ctr.p.x += p.x; ctr.p.y += p.y;
+            DPoint ps = cc.contours[idx].p;
             for(int i=0; i<4; i++) {
-                DPoint p = min(pos2DPoint(vo[i]),ctr.p);
+                DPoint p = min(pos2DPoint(vo[i]), ps);
                 c[i] = cc.create_continuum(vo[i], s, p);
             }
-            for(int i=0; i<=1; i++)
+            for(int i=0; i<=1; i++) {
+                int ri = cc.root_contour(vo[i]); 
                 for(int j=2; j<=3; j++) {
+                    int rj = cc.root_contour(vo[j]);
                     int eid = edge_id(rank[i],rank[j]);
-                    chainCode[eid].push_back(
-                     std::list<int>{cc.root_contour(vo[i]),c[i],idx,c[j],cc.root_contour(vo[j])});
+                    chainCode[eid].push_back({ri, c[i], idx, c[j], rj});
                 }
+            }
             return;
         }
-        std::swap(rank[1],rank[2]); // Make two smallest adjacent
+        std::swap(rank[1],rank[2]); // Make smallest two adjacent
         std::swap(vo[1],vo[2]);
     }
 
-    for(int i=0; i<4; i++) {
-        std::list<int> L;
-        chainCode[i].emplace_back(L);
-    }
+    for(int i=0; i<4; i++)
+        chainCode[i].push_back({});
 
     DPoint dtl = pos2DPoint(tl);
     int eMin = edge_id(rank[0], rank[1]);
-    chainCode[eMin].back().push_back(cc.root_contour(vo[0]));
+    std::list<int>& Lmin = chainCode[eMin].back();
+    Lmin.push_back(cc.root_contour(vo[0]));
     if(lvl[rank[0]]==lvl[rank[1]])
         cc.merge_contours(vo[0],vo[1]);
     else {
         c[0] = cc.create_continuum(vo[0],vo[1], dtl);
-        chainCode[eMin].back().push_back(c[0]);
-        chainCode[eMin].back().push_back(cc.root_contour(vo[1]));
+        Lmin.insert(Lmin.end(), {c[0],cc.root_contour(vo[1])});
     }
 
     int eMax = edge_id(rank[2], rank[3]);
-    chainCode[eMax].back().push_back(cc.root_contour(vo[2]));
+    std::list<int>& Lmax = chainCode[eMax].back();
+    Lmax.push_back(cc.root_contour(vo[2]));
     if(lvl[rank[2]]==lvl[rank[3]])
         cc.merge_contours(vo[2],vo[3]);
     else {
         c[1] = cc.create_continuum(vo[2],vo[3], dtl);
-        chainCode[eMax].back().push_back(c[1]);
-        chainCode[eMax].back().push_back(cc.root_contour(vo[3]));
+        Lmax.insert(Lmax.end(), {c[1], cc.root_contour(vo[3])});
     }
 
     if((rank[1]+rank[2])&1) { // two adjacent intermediate level vertices
         int eInt = edge_id(rank[1],rank[2]); // intermediate edge
-        chainCode[eInt].back().push_back(cc.root_contour(vo[1]));
+        std::list<int>& Lint = chainCode[eInt].back();
+        Lint.push_back(cc.root_contour(vo[1]));
         if(lvl[rank[1]]==lvl[rank[2]])
             cc.merge_contours(vo[1],vo[2]);
         else {
             c[2] = cc.create_continuum(vo[1],vo[2], dtl);
-            chainCode[eInt].back().push_back(c[2]);
-            chainCode[eInt].back().push_back(cc.root_contour(vo[2]));
+            Lint.insert(Lint.end(), {c[2], cc.root_contour(vo[2])});
         }
         int eMm = (eInt+2)%4; // opposite edge, linking min and max
-        chainCode[eMm].back().push_back(cc.root_contour(vo[0]));
-        if(c[0]>=0) {
-            chainCode[eMm].back().push_back(c[0]);
-            chainCode[eMm].back().push_back(cc.root_contour(vo[1]));
-        }
-        if(c[2]>=0) {
-            chainCode[eMm].back().push_back(c[2]);
-            chainCode[eMm].back().push_back(cc.root_contour(vo[2]));
-        }
-        if(c[1]>=0) {
-            chainCode[eMm].back().push_back(c[1]);
-            chainCode[eMm].back().push_back(cc.root_contour(vo[3]));
-        }
+        std::list<int>& Lmm = chainCode[eMm].back();
+        Lmm.push_back(cc.root_contour(vo[0]));
+        if(c[0]>=0)
+            Lmm.insert(Lmm.end(), {c[0], cc.root_contour(vo[1])});
+        if(c[2]>=0)
+            Lmm.insert(Lmm.end(), {c[2], cc.root_contour(vo[2])});
+        if(c[1]>=0)
+            Lmm.insert(Lmm.end(), {c[1], cc.root_contour(vo[3])});
     } else { // opposite intermediate level vertices
         if(lvl[rank[1]] == lvl[rank[2]])
             cc.merge_contours(vo[1],vo[2]);
         else
             c[2] = cc.create_continuum(vo[1],vo[2], dtl);
         int e02 = edge_id(rank[0],rank[2]);
-        chainCode[e02].back().push_back(cc.root_contour(vo[0]));
+        std::list<int>& L02 = chainCode[e02].back();
+        L02.push_back(cc.root_contour(vo[0]));
         if(lvl[rank[0]] == lvl[rank[2]])
             cc.merge_contours(vo[0],vo[2]);
         else {
-            if(c[0]>=0) {
-                chainCode[e02].back().push_back(c[0]);
-                chainCode[e02].back().push_back(cc.root_contour(vo[1]));
-            }
-            if(c[2]>=0) {
-                chainCode[e02].back().push_back(c[2]);
-                chainCode[e02].back().push_back(cc.root_contour(vo[2]));
-            }
+            if(c[0]>=0)
+                L02.insert(L02.end(), {c[0], cc.root_contour(vo[1])});         
+            if(c[2]>=0)
+                L02.insert(L02.end(), {c[2], cc.root_contour(vo[2])});
         }
         int e13 = (e02+2)%4;
-        chainCode[e13].back().push_back(cc.root_contour(vo[1]));
-        if(c[2]>=0) {
-            chainCode[e13].back().push_back(c[2]);
-            chainCode[e13].back().push_back(cc.root_contour(vo[2]));
-        }
-        if(c[1]>=0) {
-            chainCode[e13].back().push_back(c[1]);
-            chainCode[e13].back().push_back(cc.root_contour(vo[3]));
-        }
+        std::list<int>& L13 = chainCode[e13].back();
+        L13.push_back(cc.root_contour(vo[1]));
+        if(c[2]>=0)
+            L13.insert(L13.end(), {c[2], cc.root_contour(vo[2])});
+        if(c[1]>=0)
+            L13.insert(L13.end(), {c[1], cc.root_contour(vo[3])});
     }
 }
 
@@ -414,15 +402,15 @@ DPoint CC::mme_br(const DPoint& p) const {
 
 /// Create a virtual sample (saddle point) in dual pixel at p.
 Pos CC::create_saddle(Pos p, float lvl[4]) {
-    p.y += h;
-    int i = idx(p);
-    Contour& c = contours[i];
+    Pos q(p.x, p.y+h);
+    Contour& c = contours[idx(q)];
+    c.p = pos2DPoint(p);
     float num=   lvl[0]*lvl[2] - lvl[1]*lvl[3];
     float denom=(lvl[0]+lvl[2])-(lvl[1]+lvl[3]);
-    c.p.x = (lvl[0]-lvl[1])/denom;
-    c.p.y = (lvl[0]-lvl[3])/denom;
+    c.p.x += (lvl[0]-lvl[1])/denom;
+    c.p.y += (lvl[0]-lvl[3])/denom;
     c.lvl = num/denom;
-    return p;
+    return q;
 }
 
 /// Create a continuum with indexes of the inf and sup contour.
