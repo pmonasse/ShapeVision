@@ -196,7 +196,7 @@ void mark_exit(CC& cc, Rect& R, int iSplit, int iCtn, int iCtr, int iSideIn) {
 }
 
 /// Check if m<n=i or n<m=i.
-bool inside(short int i, short int m, short int n) {
+bool inside(int i, int m, int n) {
     if(m>n)
        std::swap(m,n);
     return (m<i && i==n);
@@ -230,9 +230,9 @@ void split_continuum(CC& cc, Rect& Rsrc, Rect& Rdst,
     int side=1;
     std::vector<DPoint>::iterator itn=std::next(it),
       end=cc.continua[iCtn].mme.end();
-    int dim=1-dir, lim=sep[dim];
+    const int dim=1-dir, lim=sep[dim];
     for(; itn!=end; it=itn++)
-        if(inside(lim, (*it)[dim], (*itn)[dim])) { // Crossing
+        if(inside(lim, (int)(*it)[dim], (int)(*itn)[dim])) { // Crossing
            i = R[side]->chainCode[ori[side]].begin();
            std::advance(i, (int)(*it)[dir]-Rsrc.tl[dir]);
            bool b = insert_chainCode(cc, *i, iSplit, iCtn, iCtr);
