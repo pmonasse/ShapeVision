@@ -143,11 +143,10 @@ Rect::Rect(CC& cc, Pos p, float lvl[4]) : tl(p), br(p.x+1,p.y+1) {
     }
 }
 
-/// Find in chainCode \a L the continuum of index \a iSplit, that should be
-/// present at most once. Insert before the continuum \a iCtn and the contour
-/// \a iCtr. This is used during propagation of continua and contour when
-/// splitting a continuum.
-bool insert_chainCode(CC& cc, std::list<int>& L, int iSplit, int iCtn, int iCtr) {
+/// Find in chainCode \a L the continuum of index \a iSplit, that must be
+/// present. Insert before the continuum \a iCtn and the contour \a iCtr.
+/// Used during propagation of continua and contour when splitting a continuum.
+void insert_chainCode(CC& cc, std::list<int>& L, int iSplit, int iCtn,int iCtr){
     assert(L.size()&1);
     std::list<int>::iterator it = L.begin();
     for(++it; it!=L.end(); advance(it,2)) {
@@ -155,10 +154,10 @@ bool insert_chainCode(CC& cc, std::list<int>& L, int iSplit, int iCtn, int iCtr)
         if(*it == iSplit) {
             L.insert(it, iCtn);
             L.insert(it, iCtr);
-            return true;
+            return;
         }
     }
-    return false;
+    assert(false);
 }
 
 /// Mark continuum \a iCtn and contour \a iCtr crossing the continuum of index
@@ -167,30 +166,43 @@ bool insert_chainCode(CC& cc, std::list<int>& L, int iSplit, int iCtn, int iCtr)
 /// from the search of exit edge.
 void mark_exit(CC& cc, Rect& R, int iSplit, int iCtn, int iCtr, int iSideIn) {
     const DPoint& p = cc.continua[iSplit].mme.back();
+    const float v = cc.contours[iCtr].lvl;
     if(iSideIn != 0 && p.y == R.tl.y) { // Upper edge
         std::list<std::list<int>>::iterator i = R.chainCode[0].begin();
         std::advance(i, (int)p.x-R.tl.x);
-        if( insert_chainCode(cc, *i, iSplit, iCtn, iCtr) )
+        float v1=cc.contours[i->front()].lvl, v2=cc.contours[i->back()].lvl;
+        if((v1-v)*(v2-v)<0) {
+            insert_chainCode(cc, *i, iSplit, iCtn, iCtr);
             return;
+        }
     }
     if(iSideIn != 3 && p.x == R.tl.x) { // Left edge
         std::list<std::list<int>>::iterator i = R.chainCode[3].begin();
         std::advance(i, (int)p.y-R.tl.y);
-        if( insert_chainCode(cc, *i, iSplit, iCtn, iCtr) )
+        float v1=cc.contours[i->front()].lvl, v2=cc.contours[i->back()].lvl;
+        if((v1-v)*(v2-v)<0) {
+            insert_chainCode(cc, *i, iSplit, iCtn, iCtr);
             return;
+        }
     }
     DPoint q = cc.mme_br(p);
     if(iSideIn != 1 && q.x == R.br.x) { // Right edge
         std::list<std::list<int>>::iterator i = R.chainCode[1].begin();
         std::advance(i, (int)p.y-R.tl.y);
-        if( insert_chainCode(cc, *i, iSplit, iCtn, iCtr) )
+        float v1=cc.contours[i->front()].lvl, v2=cc.contours[i->back()].lvl;
+        if((v1-v)*(v2-v)<0) {
+            insert_chainCode(cc, *i, iSplit, iCtn, iCtr);
             return;
+        }
     }
     if(iSideIn != 2 && q.y == R.br.y) { // Bottom edge
         std::list<std::list<int>>::iterator i = R.chainCode[2].begin();
         std::advance(i, (int)p.x-R.tl.x);
-        if( insert_chainCode(cc, *i, iSplit, iCtn, iCtr) )
+        float v1=cc.contours[i->front()].lvl, v2=cc.contours[i->back()].lvl;
+        if((v1-v)*(v2-v)<0) {
+            insert_chainCode(cc, *i, iSplit, iCtn, iCtr);
             return;
+        }
     }
     assert(false);
 }
@@ -223,8 +235,7 @@ void split_continuum(CC& cc, Rect& Rsrc, Rect& Rdst,
     const int dir = iSideIn&1; // adjacency of rects: 0=horizontal, 1=vertical
     std::list<std::list<int>>::iterator i = Rdst.chainCode[iSideIn].begin();
     std::advance(i, (int)p[dir]-Rdst.tl[dir]);
-    bool b = insert_chainCode(cc, *i, iSplit, iCtn, iCtr);
-    (void)b; assert(b);
+    insert_chainCode(cc, *i, iSplit, iCtn, iCtr);
     Rect* R[2] = {&Rsrc, &Rdst};
     int ori[2] = {(iSideIn+2)%4, iSideIn};
     int side=1;
@@ -235,13 +246,11 @@ void split_continuum(CC& cc, Rect& Rsrc, Rect& Rdst,
         if(inside(lim, (int)(*it)[dim], (int)(*itn)[dim])) { // Crossing
            i = R[side]->chainCode[ori[side]].begin();
            std::advance(i, (int)(*it)[dir]-Rsrc.tl[dir]);
-           bool b = insert_chainCode(cc, *i, iSplit, iCtn, iCtr);
-           (void)b; assert(b);
+           insert_chainCode(cc, *i, iSplit, iCtn, iCtr);
            side = 1-side;
            i = R[side]->chainCode[ori[side]].begin();
            std::advance(i, (int)(*it)[dir]-Rsrc.tl[dir]);
-           b = insert_chainCode(cc, *i, iSplit, iCtn, iCtr);
-           (void)b; assert(b);
+           insert_chainCode(cc, *i, iSplit, iCtn, iCtr);
         }
     iSideIn = find_side_entry(*std::prev(it), *it);
     mark_exit(cc, *R[side], iSplit, iCtn, iCtr, iSideIn);
@@ -319,7 +328,7 @@ Rect merge_rectangles(CC& cc, Rect& R1, Rect& R2) {
     if(R1.tl.x == R2.tl.x)
         o=1; // Vertical neighbors, horizontal edges
     if(R1.tl.y == R2.tl.y)
-        o=0; // Horizontal edges, vertical neighbors
+        o=0; // Horizontal neighbors, vertical edges
     assert(o==0 || o==1);
     int o1=o+1, o2=(o1+2)%4;
 
@@ -392,7 +401,7 @@ CC::CC(const float* im, int w, int h): w(w), h(h) {
 
 /// Return bottom-right corner of mme whose top-left corner is \a p.
 DPoint CC::mme_br(const DPoint& p) const {
-    DPoint q = contours[idx(Pos((int)p.x,(int)p.y+h))].p;
+    DPoint q = contours[idx((int)p.x,(int)p.y+h)].p;
     if(q.x<0 || p.x == q.x)
         q.x = (int)p.x+1;
     if(q.y<0 || p.y == q.y)
@@ -410,6 +419,13 @@ Pos CC::create_saddle(Pos p, float lvl[4]) {
     c.p.x += (lvl[0]-lvl[1])/denom;
     c.p.y += (lvl[0]-lvl[3])/denom;
     c.lvl = num/denom;
+    // The code relies on the following properties, not guaranteed with float
+    assert(c.p.x!=(int)c.p.x);
+    assert(c.p.y!=(int)c.p.y);
+    assert((lvl[0]-c.lvl)*(lvl[1]-c.lvl)<0);
+    assert((lvl[1]-c.lvl)*(lvl[2]-c.lvl)<0);
+    assert((lvl[2]-c.lvl)*(lvl[3]-c.lvl)<0);
+    assert((lvl[3]-c.lvl)*(lvl[0]-c.lvl)<0);
     return q;
 }
 
@@ -448,7 +464,7 @@ int CC::root_contour(int i) {
 int CC::adjacent_rect(const DPoint& p, Pos sep, int o) const {
     int oo=1-o;
     if((int)p[oo]==sep[oo] && (int)p[o]+1==sep[o] &&
-       (p[o]!=(int)p[o] || contours[idx(Pos((int)p.x,(int)p.y+h))].p.x<0))
+       (p[o]!=(int)p[o] || contours[idx((int)p.x,(int)p.y+h)].p.x<0))
         return -1; // p above sep
     if((int)p[oo]==sep[oo] && (int)p[o]==sep[o] && p[o]==(int)p[o])
         return 1; // p below sep
@@ -461,7 +477,7 @@ int CC::adjacent_rect(const DPoint& p, Pos sep, int o) const {
 /// o (0=vertical, 1=horizontal).
 /// Return iterator to the first element of junction.
 std::vector<DPoint>::iterator
-CC::merge_mme(std::vector<DPoint>& v1, std::vector<DPoint>& v2, Pos sep, int o) {
+CC::merge_mme(std::vector<DPoint>& v1, std::vector<DPoint>& v2, Pos sep, int o){
     const DPoint& p = v1.front();
     if(adjacent_rect(p, sep, o))
         reverse(v1.begin(), v1.end());
