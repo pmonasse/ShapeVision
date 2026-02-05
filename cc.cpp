@@ -90,50 +90,45 @@ Rect CC::build_mme(Pos p, const float lvl[4]) {
         R.chainCode[i].push_back({});
 
     DPoint dtl = pos2DPoint(R.tl);
-    int eMin = edge_id(rank[0], rank[1]);
-    std::list<int>& Lmin = R.chainCode[eMin].back();
-    c[0] = fill_simple_chainCode(Lmin, lvl, rank+0, vo+0, dtl);
-
-    int eMax = edge_id(rank[2], rank[3]);
-    std::list<int>& Lmax = R.chainCode[eMax].back();
-    c[1] = fill_simple_chainCode(Lmax, lvl, rank+2, vo+2, dtl);
+    for(int i=0; i<4; i+=2) { // Chain-codes for edges between min 2 and max 2
+        int j = edge_id(rank[i], rank[i+1]);
+        std::list<int>& L = R.chainCode[j].back();
+        c[i] = fill_simple_chainCode(L, lvl, rank+i, vo+i, dtl);
+    }
 
     if((rank[1]+rank[2])&1) { // two adjacent intermediate level vertices
         int eInt = edge_id(rank[1],rank[2]); // intermediate edge
         std::list<int>& Lint = R.chainCode[eInt].back();
-        c[2] = fill_simple_chainCode(Lint, lvl, rank+1, vo+1, dtl);
+        c[1] = fill_simple_chainCode(Lint, lvl, rank+1, vo+1, dtl);
+
         int eMm = (eInt+2)%4; // opposite edge, linking min and max
         std::list<int>& Lmm = R.chainCode[eMm].back();
         Lmm.push_back(root_contour(vo[0]));
-        if(c[0]>=0)
-            Lmm.insert(Lmm.end(), {c[0], root_contour(vo[1])});
-        if(c[2]>=0)
-            Lmm.insert(Lmm.end(), {c[2], root_contour(vo[2])});
-        if(c[1]>=0)
-            Lmm.insert(Lmm.end(), {c[1], root_contour(vo[3])});
+        for(int i=0; i<3; i++)
+            if(c[i]>=0)
+                Lmm.insert(Lmm.end(), {c[i], root_contour(vo[i+1])});
     } else { // opposite intermediate level vertices
         if(lvl[rank[1]] == lvl[rank[2]])
             merge_contours(vo[1],vo[2]);
         else
-            c[2] = create_continuum(vo[1],vo[2], dtl);
+            c[1] = create_continuum(vo[1],vo[2], dtl);
+
         int e02 = edge_id(rank[0],rank[2]);
         std::list<int>& L02 = R.chainCode[e02].back();
         L02.push_back(root_contour(vo[0]));
         if(lvl[rank[0]] == lvl[rank[2]])
             merge_contours(vo[0],vo[2]);
-        else {
-            if(c[0]>=0)
-                L02.insert(L02.end(), {c[0], root_contour(vo[1])});         
-            if(c[2]>=0)
-                L02.insert(L02.end(), {c[2], root_contour(vo[2])});
-        }
+        else
+            for(int i=0; i<2; i++)
+                if(c[i]>=0)
+                    L02.insert(L02.end(), {c[i], root_contour(vo[i+1])});
+
         int e13 = (e02+2)%4;
         std::list<int>& L13 = R.chainCode[e13].back();
         L13.push_back(root_contour(vo[1]));
-        if(c[2]>=0)
-            L13.insert(L13.end(), {c[2], root_contour(vo[2])});
-        if(c[1]>=0)
-            L13.insert(L13.end(), {c[1], root_contour(vo[3])});
+        for(int i=1; i<3; i++)
+            if(c[i]>=0)
+                L13.insert(L13.end(), {c[i], root_contour(vo[i+1])});
     }
     return R;
 }
