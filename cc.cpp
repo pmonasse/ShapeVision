@@ -33,9 +33,27 @@ int edge_id(int i, int j) {
     return k;
 }
 
+/// Fill the chain-code of an uninterrupted edge of an mme.
+/// The vertices are in \a v, their level in \a lvl at index in \a ind. The
+/// top-left corner is dtl. Return the index of the newly created continuum
+/// or -1 if the vertices are in a single contour.
+int CC::fill_simple_chainCode(std::list<int>& L,
+                              const float lvl[4], const int ind[2],
+                              const Pos v[2], const DPoint& dtl) {
+    L.push_back(root_contour(v[0]));
+    int i=-1;
+    if(lvl[ind[0]] == lvl[ind[1]])
+        merge_contours(v[0],v[1]);
+    else {
+        i = create_continuum(v[0],v[1], dtl);
+        L.insert(L.end(), {i,root_contour(v[1])} );
+    }
+    return i;
+}
+
 /// Constructor of rectangle of size 1x1, needing the four levels to build
 /// the chain-codes.
-Rect CC::build_mme(Pos p, float lvl[4]) {
+Rect CC::build_mme(Pos p, const float lvl[4]) {
     Rect R(p, Pos(p.x+1,p.y+1));
     const Pos v[] = {p, Pos(R.br.x,p.y), R.br, Pos(p.x,R.br.y)};
     int rank[4] = {0,1,2,3};
@@ -74,34 +92,16 @@ Rect CC::build_mme(Pos p, float lvl[4]) {
     DPoint dtl = pos2DPoint(R.tl);
     int eMin = edge_id(rank[0], rank[1]);
     std::list<int>& Lmin = R.chainCode[eMin].back();
-    Lmin.push_back(root_contour(vo[0]));
-    if(lvl[rank[0]]==lvl[rank[1]])
-        merge_contours(vo[0],vo[1]);
-    else {
-        c[0] = create_continuum(vo[0],vo[1], dtl);
-        Lmin.insert(Lmin.end(), {c[0],root_contour(vo[1])});
-    }
+    c[0] = fill_simple_chainCode(Lmin, lvl, rank+0, vo+0, dtl);
 
     int eMax = edge_id(rank[2], rank[3]);
     std::list<int>& Lmax = R.chainCode[eMax].back();
-    Lmax.push_back(root_contour(vo[2]));
-    if(lvl[rank[2]]==lvl[rank[3]])
-        merge_contours(vo[2],vo[3]);
-    else {
-        c[1] = create_continuum(vo[2],vo[3], dtl);
-        Lmax.insert(Lmax.end(), {c[1], root_contour(vo[3])});
-    }
+    c[1] = fill_simple_chainCode(Lmax, lvl, rank+2, vo+2, dtl);
 
     if((rank[1]+rank[2])&1) { // two adjacent intermediate level vertices
         int eInt = edge_id(rank[1],rank[2]); // intermediate edge
         std::list<int>& Lint = R.chainCode[eInt].back();
-        Lint.push_back(root_contour(vo[1]));
-        if(lvl[rank[1]]==lvl[rank[2]])
-            merge_contours(vo[1],vo[2]);
-        else {
-            c[2] = create_continuum(vo[1],vo[2], dtl);
-            Lint.insert(Lint.end(), {c[2], root_contour(vo[2])});
-        }
+        c[2] = fill_simple_chainCode(Lint, lvl, rank+1, vo+1, dtl);
         int eMm = (eInt+2)%4; // opposite edge, linking min and max
         std::list<int>& Lmm = R.chainCode[eMm].back();
         Lmm.push_back(root_contour(vo[0]));
@@ -437,7 +437,7 @@ DPoint CC::mme_br(const DPoint& p) const {
 }
 
 /// Create a virtual sample (saddle point) in dual pixel at p.
-Pos CC::create_saddle(Pos p, float lvl[4]) {
+Pos CC::create_saddle(Pos p, const float lvl[4]) {
     Pos q(p.x, p.y+h);
     Contour& c = contours[idx(q)];
     c.p = pos2DPoint(p);

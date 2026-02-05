@@ -59,14 +59,17 @@ struct CC {
 private:
     bool adjacent_rect(const DPoint& p, Pos sep, int o) const;
     DPoint mme_br(const DPoint& p) const;
-    Pos create_saddle(Pos p, float lvl[4]);
+    Pos create_saddle(Pos p, const float lvl[4]);
     int create_continuum(Pos inf, Pos sup, const DPoint& p);
     int root_contour(int i);
     int root_contour(Pos c) { return root_contour(idx(c)); }
     int root_continuum(int i);
     void merge_contours(Pos c1, Pos c2);
 
-    Rect build_mme(Pos p, float lvl[4]);
+    int fill_simple_chainCode(std::list<int>& L,
+                              const float lvl[4], const int ind[2],
+                              const Pos v[2], const DPoint& dtl);
+    Rect build_mme(Pos p, const float lvl[4]);
     void insert_chainCode(std::list<int>& L, int iSplit, int iCtn,int iCtr);
     void mark_exit(Rect& R, int iSplit, int iCtn, int iCtr, int iSideIn);
     void split_continuum(Rect& Rsrc, Rect& Rdst,
