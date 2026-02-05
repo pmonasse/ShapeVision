@@ -3,13 +3,14 @@
  * @file cc.h
  * @brief Contours & Continua
  * @author Pascal Monasse <pascal.monasse@enpc.fr>
- * @date 2025
+ * @date 2025-2026
  */
 
 #ifndef CC_H
 #define CC_H
 
 #include <vector>
+#include <list>
 
 template <typename T>
 struct Point {
@@ -39,30 +40,44 @@ struct Continuum {
     Continuum(int inf, int sup): parent(-1), infCtr(inf), supCtr(sup) {}
 };
 
+struct Rect {
+    Pos tl, br; ///< Top-left and bottom-right corners of rectangle
+    std::list<std::list<int>> chainCode[4];
+    Rect(Pos topLeft, Pos bottomRight) : tl(topLeft), br(bottomRight) {}
+};
+
 /// Contours and continua
 struct CC {
     Contour* contours;
     std::vector<Continuum> continua;
+    Rect R;
     int w,h;
     CC(const float* im, int w, int h);
 
     int idx(int x, int y) const { return y*w+x; }
     int idx(Pos p) const { return idx(p.x,p.y); }
+private:
+    bool adjacent_rect(const DPoint& p, Pos sep, int o) const;
     DPoint mme_br(const DPoint& p) const;
-
     Pos create_saddle(Pos p, float lvl[4]);
     int create_continuum(Pos inf, Pos sup, const DPoint& p);
-
-    void merge_contours(Pos c1, Pos c2);
     int root_contour(int i);
     int root_contour(Pos c) { return root_contour(idx(c)); }
+    int root_continuum(int i);
+    void merge_contours(Pos c1, Pos c2);
 
+    Rect build_mme(Pos p, float lvl[4]);
+    void insert_chainCode(std::list<int>& L, int iSplit, int iCtn,int iCtr);
+    void mark_exit(Rect& R, int iSplit, int iCtn, int iCtr, int iSideIn);
+    void split_continuum(Rect& Rsrc, Rect& Rdst,
+                         std::vector<DPoint>::iterator it, Pos sep,
+                         int iSplit, int iCtn, int iCtr, int iSideIn);
+    void propagate(Rect& R1, Rect& R2, Pos sep, int o,
+                   const std::list<int>& L1, const std::list<int>& L2);
+    Rect merge_rectangles(Rect& R1, Rect& R2);
     std::vector<DPoint>::iterator
     merge_mme(std::vector<DPoint>& v1, std::vector<DPoint>& v2,
               Pos sep, int o);
-    int root_continuum(int i);
-private:
-    int adjacent_rect(const DPoint& p, Pos sep, int o) const;
 };
 
 #endif
