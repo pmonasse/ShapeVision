@@ -33,16 +33,87 @@ int edge_id(int i, int j) {
     return k;
 }
 
+/// Place v[i] at position order[i]. \a order is a permutation of {0,1,2,3}.
+template <typename T>
+void apply_permutation(const int order[4], T v[4]) {
+    unsigned char todo = (1<<4)-1;
+    for(int i=0; i<4; i++)
+        if(todo & 1<<i) {
+            for(int j=order[i]; j!=i; j=order[j]) {
+                std::swap(v[j],v[i]);
+                todo ^= 1<<j;
+            }
+            todo ^= 1<<i;
+        }
+}
+
+/// Find the canonical contour and perform path compression.
+int CC::root_contour(int i) {
+    int j=contours[i].parent;
+    if(j<0)
+        return i;
+    return (contours[i].parent = root_contour(j));
+}
+
+/// Set contour at c2 have the same canonical element as the one at c1.
+void CC::merge_contours(Pos c1, Pos c2) {
+    assert(contours[idx(c1)].lvl == contours[idx(c2)].lvl);
+    int i1 = root_contour(c1);
+    int i2 = root_contour(c2);
+    if(i1!=i2)
+        contours[i2].parent = i1;
+}
+
+/// Create a continuum with indexes of the inf and sup contour.
+/// Return an identifier (index in array) for the continuum.
+int CC::create_continuum(Pos inf, Pos sup, const DPoint& p) {
+    int i=(int)continua.size();
+    int j=root_contour(inf), k=root_contour(sup);
+    if(contours[j].lvl > contours[k].lvl)
+        std::swap(j,k);
+    Continuum c(j,k);
+    c.mme.push_back(p);
+    continua.push_back(c);
+    return i;
+}
+
+/// Find the canonical contour and perform path compression.
+int CC::root_continuum(int i) {
+    int j=continua[i].parent;
+    if(j<0)
+        return i;
+    return (continua[i].parent = root_continuum(j));
+}
+
+/// Create a virtual sample (saddle point) in dual pixel at p.
+Pos CC::create_saddle(Pos p, const float lvl[4]) {
+    Pos q(p.x, p.y+h);
+    Contour& c = contours[idx(q)];
+    c.p = pos2DPoint(p);
+    float num=   lvl[0]*lvl[2] - lvl[1]*lvl[3];
+    float denom=(lvl[0]+lvl[2])-(lvl[1]+lvl[3]);
+    c.p.x += (lvl[0]-lvl[1])/denom;
+    c.p.y += (lvl[0]-lvl[3])/denom;
+    c.lvl = num/denom;
+    // The code relies on the following properties, not guaranteed with float
+    assert(c.p.x!=(int)c.p.x);
+    assert(c.p.y!=(int)c.p.y);
+    assert((lvl[0]-c.lvl)*(lvl[1]-c.lvl)<0);
+    assert((lvl[1]-c.lvl)*(lvl[2]-c.lvl)<0);
+    assert((lvl[2]-c.lvl)*(lvl[3]-c.lvl)<0);
+    assert((lvl[3]-c.lvl)*(lvl[0]-c.lvl)<0);
+    return q;
+}
+
 /// Fill the chain-code of an uninterrupted edge of an mme.
-/// The vertices are in \a v, their level in \a lvl at index in \a ind. The
-/// top-left corner is dtl. Return the index of the newly created continuum
-/// or -1 if the vertices are in a single contour.
-int CC::fill_simple_chainCode(std::list<int>& L,
-                              const float lvl[4], const int ind[2],
+/// The vertices are in \a v, their level in \a lvl. The top-left corner is dtl.
+/// Return the index of the newly created continuum or -1 if the vertices are
+/// in a single contour.
+int CC::fill_simple_chainCode(std::list<int>& L, const float lvl[2],
                               const Pos v[2], const DPoint& dtl) {
     L.push_back(root_contour(v[0]));
     int i=-1;
-    if(lvl[ind[0]] == lvl[ind[1]])
+    if(lvl[0] == lvl[1])
         merge_contours(v[0],v[1]);
     else {
         i = create_continuum(v[0],v[1], dtl);
@@ -52,30 +123,30 @@ int CC::fill_simple_chainCode(std::list<int>& L,
 }
 
 /// Constructor of rectangle of size 1x1, needing the four levels to build
-/// the chain-codes.
-Rect CC::build_mme(Pos p, const float lvl[4]) {
-    Rect R(p, Pos(p.x+1,p.y+1));
-    const Pos v[] = {p, Pos(R.br.x,p.y), R.br, Pos(p.x,R.br.y)};
-    int rank[4] = {0,1,2,3};
+/// the chain-codes. Warning: lvl is modified as a side-effect.
+Rect CC::build_mme(Pos p, float lvl[4]) {
+    int rank[4] = {0,1,2,3}, order[4];
     auto CompareValue = [lvl](int i, int j) { return lvl[i]<lvl[j]; };
     std::sort(rank, rank+4, CompareValue);
-    Pos vo[4]; // Vertices ordered by level
-    for(int i=0; i<4; i++)
-        vo[i] = v[rank[i]];
+    for(int i=0; i<4; i++) order[rank[i]] = i; // inverse permutation
+    Rect R(p, Pos(p.x+1,p.y+1));
+    Pos v[] = {p, Pos(R.br.x,p.y), R.br, Pos(p.x,R.br.y)};
+    apply_permutation(order, v);
+
     int c[4] = {-1,-1,-1,-1}; // Up to 4 continua
-    if(((rank[0]+rank[1])&1) == 0) { // Smallest two diagonally opposite
+    if(((rank[0]+rank[1]) & 1) == 0) { // Smallest two diagonally opposite
         if(lvl[rank[1]] < lvl[rank[2]]) { // Saddle
             Pos s = create_saddle(p, lvl);
             int id=idx(s);
             DPoint ps = contours[id].p;
             for(int i=0; i<4; i++) {
-                DPoint p = min(pos2DPoint(vo[i]), ps);
-                c[i] = create_continuum(vo[i], s, p);
+                DPoint p = min(pos2DPoint(v[i]), ps);
+                c[i] = create_continuum(v[i], s, p);
             }
             for(int i=0; i<=1; i++) {
-                int ri = root_contour(vo[i]); 
+                int ri = root_contour(v[i]); 
                 for(int j=2; j<=3; j++) {
-                    int rj = root_contour(vo[j]);
+                    int rj = root_contour(v[j]);
                     int eid = edge_id(rank[i],rank[j]);
                     R.chainCode[eid].push_back({ri, c[i], id, c[j], rj});
                 }
@@ -83,9 +154,10 @@ Rect CC::build_mme(Pos p, const float lvl[4]) {
             return R;
         }
         std::swap(rank[1],rank[2]); // Make smallest two adjacent
-        std::swap(vo[1],vo[2]);
+        std::swap(v[1],v[2]);
     }
 
+    apply_permutation(order, lvl);
     for(int i=0; i<4; i++)
         R.chainCode[i].push_back({});
 
@@ -93,42 +165,42 @@ Rect CC::build_mme(Pos p, const float lvl[4]) {
     for(int i=0; i<4; i+=2) { // Chain-codes for edges between min 2 and max 2
         int j = edge_id(rank[i], rank[i+1]);
         std::list<int>& L = R.chainCode[j].back();
-        c[i] = fill_simple_chainCode(L, lvl, rank+i, vo+i, dtl);
+        c[i] = fill_simple_chainCode(L, lvl+i, v+i, dtl);
     }
 
-    if((rank[1]+rank[2])&1) { // two adjacent intermediate level vertices
+    if((rank[1]+rank[2]) & 1) { // two adjacent intermediate level vertices
         int eInt = edge_id(rank[1],rank[2]); // intermediate edge
         std::list<int>& Lint = R.chainCode[eInt].back();
-        c[1] = fill_simple_chainCode(Lint, lvl, rank+1, vo+1, dtl);
+        c[1] = fill_simple_chainCode(Lint, lvl+1, v+1, dtl);
 
         int eMm = (eInt+2)%4; // opposite edge, linking min and max
         std::list<int>& Lmm = R.chainCode[eMm].back();
-        Lmm.push_back(root_contour(vo[0]));
+        Lmm.push_back(root_contour(v[0]));
         for(int i=0; i<3; i++)
             if(c[i]>=0)
-                Lmm.insert(Lmm.end(), {c[i], root_contour(vo[i+1])});
+                Lmm.insert(Lmm.end(), {c[i], root_contour(v[i+1])});
     } else { // opposite intermediate level vertices
-        if(lvl[rank[1]] == lvl[rank[2]])
-            merge_contours(vo[1],vo[2]);
+        if(lvl[1] == lvl[2])
+            merge_contours(v[1],v[2]);
         else
-            c[1] = create_continuum(vo[1],vo[2], dtl);
+            c[1] = create_continuum(v[1],v[2], dtl);
 
         int e02 = edge_id(rank[0],rank[2]);
         std::list<int>& L02 = R.chainCode[e02].back();
-        L02.push_back(root_contour(vo[0]));
-        if(lvl[rank[0]] == lvl[rank[2]])
-            merge_contours(vo[0],vo[2]);
+        L02.push_back(root_contour(v[0]));
+        if(lvl[0] == lvl[2])
+            merge_contours(v[0],v[2]);
         else
             for(int i=0; i<2; i++)
                 if(c[i]>=0)
-                    L02.insert(L02.end(), {c[i], root_contour(vo[i+1])});
+                    L02.insert(L02.end(), {c[i], root_contour(v[i+1])});
 
         int e13 = (e02+2)%4;
         std::list<int>& L13 = R.chainCode[e13].back();
-        L13.push_back(root_contour(vo[1]));
+        L13.push_back(root_contour(v[1]));
         for(int i=1; i<3; i++)
             if(c[i]>=0)
-                L13.insert(L13.end(), {c[i], root_contour(vo[i+1])});
+                L13.insert(L13.end(), {c[i], root_contour(v[i+1])});
     }
     return R;
 }
@@ -178,6 +250,16 @@ void CC::insert_chainCode(std::list<int>& L, int iSplit, int iCtn,int iCtr) {
         }
     }
     assert(false);
+}
+
+/// Return bottom-right corner of mme whose top-left corner is \a p.
+DPoint CC::mme_br(const DPoint& p) const {
+    DPoint q = contours[idx((int)p.x,(int)p.y+h)].p;
+    if(q.x<0 || p.x == q.x)
+        q.x = (int)p.x+1;
+    if(q.y<0 || p.y == q.y)
+        q.y = (int)p.y+1;
+    return q;
 }
 
 /// Mark continuum \a iCtn and contour \a iCtr crossing the continuum of index
@@ -419,72 +501,4 @@ CC::CC(const float* im, int w, int h): R(Pos(0,0),Pos(w-1,h-1)), w(w), h(h) {
         h2=(h2+1)/2;
     }
     std::swap(R, rects.back());
-}
-
-/// Return bottom-right corner of mme whose top-left corner is \a p.
-DPoint CC::mme_br(const DPoint& p) const {
-    DPoint q = contours[idx((int)p.x,(int)p.y+h)].p;
-    if(q.x<0 || p.x == q.x)
-        q.x = (int)p.x+1;
-    if(q.y<0 || p.y == q.y)
-        q.y = (int)p.y+1;
-    return q;
-}
-
-/// Create a virtual sample (saddle point) in dual pixel at p.
-Pos CC::create_saddle(Pos p, const float lvl[4]) {
-    Pos q(p.x, p.y+h);
-    Contour& c = contours[idx(q)];
-    c.p = pos2DPoint(p);
-    float num=   lvl[0]*lvl[2] - lvl[1]*lvl[3];
-    float denom=(lvl[0]+lvl[2])-(lvl[1]+lvl[3]);
-    c.p.x += (lvl[0]-lvl[1])/denom;
-    c.p.y += (lvl[0]-lvl[3])/denom;
-    c.lvl = num/denom;
-    // The code relies on the following properties, not guaranteed with float
-    assert(c.p.x!=(int)c.p.x);
-    assert(c.p.y!=(int)c.p.y);
-    assert((lvl[0]-c.lvl)*(lvl[1]-c.lvl)<0);
-    assert((lvl[1]-c.lvl)*(lvl[2]-c.lvl)<0);
-    assert((lvl[2]-c.lvl)*(lvl[3]-c.lvl)<0);
-    assert((lvl[3]-c.lvl)*(lvl[0]-c.lvl)<0);
-    return q;
-}
-
-/// Create a continuum with indexes of the inf and sup contour.
-/// Return an identifier (index in array) for the continuum.
-int CC::create_continuum(Pos inf, Pos sup, const DPoint& p) {
-    int i=(int)continua.size();
-    int j=root_contour(inf), k=root_contour(sup);
-    if(contours[j].lvl > contours[k].lvl)
-        std::swap(j,k);
-    Continuum c(j,k);
-    c.mme.push_back(p);
-    continua.push_back(c);
-    return i;
-}
-
-/// Set contour at c2 have the same canonical element as the one at c1.
-void CC::merge_contours(Pos c1, Pos c2) {
-    assert(contours[idx(c1)].lvl == contours[idx(c2)].lvl);
-    int i1 = root_contour(c1);
-    int i2 = root_contour(c2);
-    if(i1!=i2)
-        contours[i2].parent = i1;
-}
-
-/// Find the canonical contour and perform path compression.
-int CC::root_contour(int i) {
-    int j=contours[i].parent;
-    if(j<0)
-        return i;
-    return (contours[i].parent = root_contour(j));
-}
-
-/// Find the canonical contour and perform path compression.
-int CC::root_continuum(int i) {
-    int j=continua[i].parent;
-    if(j<0)
-        return i;
-    return (continua[i].parent = root_continuum(j));
 }

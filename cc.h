@@ -66,10 +66,9 @@ private:
     int root_continuum(int i);
     void merge_contours(Pos c1, Pos c2);
 
-    int fill_simple_chainCode(std::list<int>& L,
-                              const float lvl[4], const int ind[2],
+    int fill_simple_chainCode(std::list<int>& L, const float lvl[2],
                               const Pos v[2], const DPoint& dtl);
-    Rect build_mme(Pos p, const float lvl[4]);
+    Rect build_mme(Pos p, float lvl[4]);
     void insert_chainCode(std::list<int>& L, int iSplit, int iCtn,int iCtr);
     void mark_exit(Rect& R, int iSplit, int iCtn, int iCtr, int iSideIn);
     void split_continuum(Rect& Rsrc, Rect& Rdst,
