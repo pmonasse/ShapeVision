@@ -55,11 +55,11 @@ int CC::root_contour(int i) {
     return (contours[i].parent = root_contour(j));
 }
 
-/// Set contour at c2 have the same canonical element as the one at c1.
-void CC::merge_contours(Pos c1, Pos c2) {
-    assert(contours[idx(c1)].lvl == contours[idx(c2)].lvl);
-    int i1 = root_contour(c1);
-    int i2 = root_contour(c2);
+/// Set contour at index \a i2 have the same canonical element as at \a i1.
+void CC::merge_contours(int i1, int i2) {
+    assert(contours[i1].lvl == contours[i2].lvl);
+    i1 = root_contour(i1);
+    i2 = root_contour(i2);
     if(i1!=i2)
         contours[i2].parent = i1;
 }
@@ -111,13 +111,12 @@ Pos CC::create_saddle(Pos p, const float lvl[4]) {
 /// in a single contour.
 int CC::fill_simple_chainCode(std::list<int>& L, const float lvl[2],
                               const Pos v[2], const DPoint& dtl) {
-    L.push_back(root_contour(v[0]));
     int i=-1;
     if(lvl[0] == lvl[1])
         merge_contours(v[0],v[1]);
     else {
         i = create_continuum(v[0],v[1], dtl);
-        L.insert(L.end(), {i,root_contour(v[1])} );
+        L.push_back(i);
     }
     return i;
 }
@@ -143,14 +142,11 @@ Rect CC::build_mme(Pos p, float lvl[4]) {
                 DPoint p = min(pos2DPoint(v[i]), ps);
                 c[i] = create_continuum(v[i], s, p);
             }
-            for(int i=0; i<=1; i++) {
-                int ri = root_contour(v[i]); 
+            for(int i=0; i<=1; i++)
                 for(int j=2; j<=3; j++) {
-                    int rj = root_contour(v[j]);
                     int eid = edge_id(rank[i],rank[j]);
-                    R.chainCode[eid].push_back({ri, c[i], id, c[j], rj});
+                    R.chainCode[eid].push_back({c[i], c[j]});
                 }
-            }
             return R;
         }
         std::swap(rank[1],rank[2]); // Make smallest two adjacent
@@ -175,10 +171,9 @@ Rect CC::build_mme(Pos p, float lvl[4]) {
 
         int eMm = (eInt+2)%4; // opposite edge, linking min and max
         std::list<int>& Lmm = R.chainCode[eMm].back();
-        Lmm.push_back(root_contour(v[0]));
         for(int i=0; i<3; i++)
             if(c[i]>=0)
-                Lmm.insert(Lmm.end(), {c[i], root_contour(v[i+1])});
+                Lmm.push_back(c[i]);
     } else { // opposite intermediate level vertices
         if(lvl[1] == lvl[2])
             merge_contours(v[1],v[2]);
@@ -187,20 +182,18 @@ Rect CC::build_mme(Pos p, float lvl[4]) {
 
         int e02 = edge_id(rank[0],rank[2]);
         std::list<int>& L02 = R.chainCode[e02].back();
-        L02.push_back(root_contour(v[0]));
         if(lvl[0] == lvl[2])
             merge_contours(v[0],v[2]);
         else
             for(int i=0; i<2; i++)
                 if(c[i]>=0)
-                    L02.insert(L02.end(), {c[i], root_contour(v[i+1])});
+                    L02.push_back(c[i]);
 
         int e13 = (e02+2)%4;
         std::list<int>& L13 = R.chainCode[e13].back();
-        L13.push_back(root_contour(v[1]));
         for(int i=1; i<3; i++)
             if(c[i]>=0)
-                L13.insert(L13.end(), {c[i], root_contour(v[i+1])});
+                L13.push_back(c[i]);
     }
     return R;
 }
@@ -235,23 +228,6 @@ CC::merge_mme(std::vector<DPoint>& v1, std::vector<DPoint>& v2, Pos sep, int o){
     return v1.begin()+n;
 }
 
-/// Find in chainCode \a L the continuum of index \a iSplit, that must be
-/// present. Insert before the continuum \a iCtn and the contour \a iCtr.
-/// Used during propagation of continua and contour when splitting a continuum.
-void CC::insert_chainCode(std::list<int>& L, int iSplit, int iCtn,int iCtr) {
-    assert(L.size()&1);
-    std::list<int>::iterator it = L.begin();
-    for(++it; it!=L.end(); advance(it,2)) {
-        *it = root_continuum(*it);
-        if(*it == iSplit) {
-            L.insert(it, iCtn);
-            L.insert(it, iCtr);
-            return;
-        }
-    }
-    assert(false);
-}
-
 /// Return bottom-right corner of mme whose top-left corner is \a p.
 DPoint CC::mme_br(const DPoint& p) const {
     DPoint q = contours[idx((int)p.x,(int)p.y+h)].p;
@@ -262,49 +238,68 @@ DPoint CC::mme_br(const DPoint& p) const {
     return q;
 }
 
-/// Mark continuum \a iCtn and contour \a iCtr crossing the continuum of index
+/// Find in chainCode \a L the continuum of index \a iSplit, that must be
+/// present. Insert before the continuum \a iCtn.
+/// Used during propagation of continua and contour when splitting a continuum.
+void CC::insert_chainCode(std::list<int>& L, int iSplit, int iCtn) {
+    assert(iSplit==root_continuum(iSplit));
+    std::list<int>::iterator it=L.begin(), end=L.end();
+    for(; it!=end; ++it)
+        if((*it=root_continuum(*it))==iSplit)
+            break;
+    assert(it!=L.end());
+    L.insert(it, iCtn);
+}
+
+/// If the chainCode \a L contains the continuum \a iSplit, insert \a iCtn.
+/// \a iSplit must be a root continuum. \a v is a contour value that is
+/// within the interval defined by contours bounding \a iSplit.
+/// Return whether it did something.
+/// TODO: instead of linear search by insert_chainCode, use dichotomy.
+bool CC::mark_exit_side(std::list<int>& L, float v, int iSplit, int iCtn) {
+    if(! L.empty()) {
+        float v1=contours[continua[L.front()].infCtr].lvl;
+        float v2=contours[continua[L.back()] .supCtr].lvl;
+        if((v1-v)*(v2-v)<0) {
+            insert_chainCode(L, iSplit, iCtn);
+            return true;
+        }
+    }
+    return false;
+}
+
+/// Mark continuum \a iCtn and its sup-contour crossing the continuum of index
 /// \a iSplit. This is for the exit edge of the last mme of \a iSplit out of
 /// \a R. The side \a iSideIn (0..3), representing entry edge, must be skipped
 /// from the search of exit edge.
-void CC::mark_exit(Rect& R, int iSplit, int iCtn, int iCtr, int iSideIn) {
+void CC::mark_exit(Rect& R, int iSplit, int iCtn, int iSideIn) {
     const DPoint& p = continua[iSplit].mme.back();
-    const float v = contours[iCtr].lvl;
+    const int j = continua[iCtn].supCtr;
+    const float v = contours[j].lvl;
     if(iSideIn != 0 && p.y == R.tl.y) { // Upper edge
         std::list<std::list<int>>::iterator i = R.chainCode[0].begin();
         std::advance(i, (int)p.x-R.tl.x);
-        float v1=contours[i->front()].lvl, v2=contours[i->back()].lvl;
-        if((v1-v)*(v2-v)<0) {
-            insert_chainCode(*i, iSplit, iCtn, iCtr);
+        if( mark_exit_side(*i, v, iSplit, iCtn) )
             return;
-        }
     }
     if(iSideIn != 3 && p.x == R.tl.x) { // Left edge
         std::list<std::list<int>>::iterator i = R.chainCode[3].begin();
         std::advance(i, (int)p.y-R.tl.y);
-        float v1=contours[i->front()].lvl, v2=contours[i->back()].lvl;
-        if((v1-v)*(v2-v)<0) {
-            insert_chainCode(*i, iSplit, iCtn, iCtr);
+        if( mark_exit_side(*i, v, iSplit, iCtn) )
             return;
-        }
     }
     DPoint q = mme_br(p);
     if(iSideIn != 1 && q.x == R.br.x) { // Right edge
         std::list<std::list<int>>::iterator i = R.chainCode[1].begin();
         std::advance(i, (int)p.y-R.tl.y);
-        float v1=contours[i->front()].lvl, v2=contours[i->back()].lvl;
-        if((v1-v)*(v2-v)<0) {
-            insert_chainCode(*i, iSplit, iCtn, iCtr);
+        if( mark_exit_side(*i, v, iSplit, iCtn) )
             return;
-        }
     }
     if(iSideIn != 2 && q.y == R.br.y) { // Bottom edge
         std::list<std::list<int>>::iterator i = R.chainCode[2].begin();
         std::advance(i, (int)p.x-R.tl.x);
-        float v1=contours[i->front()].lvl, v2=contours[i->back()].lvl;
-        if((v1-v)*(v2-v)<0) {
-            insert_chainCode(*i, iSplit, iCtn, iCtr);
+        if( mark_exit_side(*i, v, iSplit, iCtn) )
             return;
-        }
     }
     assert(false);
 }
@@ -324,20 +319,19 @@ int find_side_entry(const DPoint& src, const DPoint& dst) {
   return 1-((int)dst.y-(int)src.y);
 }
 
-/// The continuum of index \a iSplit must be split by the continuum \a iCtn
-/// with delimiting contour \a iCtr. The side \a iSideIn (0..3) is the entry
-/// direction. \a it points to the mme of entry.
+/// The continuum of index \a iSplit must be split by the sup-contour of
+/// continuum \a iCtn. The side \a iSideIn (0..3) is the entry direction.
+/// \a it points to the mme of entry.
 /// All crossings through edges at the same level as \a sep are recorded in
 /// the chain codes.
 void CC::split_continuum(Rect& Rsrc, Rect& Rdst,
                          std::vector<DPoint>::iterator it, Pos sep,
-                         int iSplit, int iCtn, int iCtr, int iSideIn) {
-    continua[iSplit].infCtr = iCtr;
+                         int iSplit, int iCtn, int iSideIn) {
     const DPoint& p = *it;
     const int dir = iSideIn&1; // adjacency of rects: 0=horizontal, 1=vertical
     std::list<std::list<int>>::iterator i = Rdst.chainCode[iSideIn].begin();
     std::advance(i, (int)p[dir]-Rdst.tl[dir]);
-    insert_chainCode(*i, iSplit, iCtn, iCtr);
+    insert_chainCode(*i, iSplit, iCtn);
     Rect* R[2] = {&Rsrc, &Rdst};
     int ori[2] = {(iSideIn+2)%4, iSideIn};
     int side=1;
@@ -348,14 +342,15 @@ void CC::split_continuum(Rect& Rsrc, Rect& Rdst,
         if(inside(lim, (int)(*it)[dim], (int)(*itn)[dim])) { // Crossing
            i = R[side]->chainCode[ori[side]].begin();
            std::advance(i, (int)(*it)[dir]-Rsrc.tl[dir]);
-           insert_chainCode(*i, iSplit, iCtn, iCtr);
+           insert_chainCode(*i, iSplit, iCtn);
            side = 1-side;
            i = R[side]->chainCode[ori[side]].begin();
            std::advance(i, (int)(*it)[dir]-Rsrc.tl[dir]);
-           insert_chainCode(*i, iSplit, iCtn, iCtr);
+           insert_chainCode(*i, iSplit, iCtn);
         }
     iSideIn = find_side_entry(*std::prev(it), *it);
-    mark_exit(*R[side], iSplit, iCtn, iCtr, iSideIn);
+    mark_exit(*R[side], iSplit, iCtn, iSideIn);
+    continua[iSplit].infCtr = continua[iCtn].supCtr;
 }
 
 /// Given two chain-codes \a L1 and \a L2 along a common edge, merge or split
@@ -364,67 +359,49 @@ void CC::split_continuum(Rect& Rsrc, Rect& Rdst,
 /// enclosing rectangles \a R1 and \a R2 are adjacent.
 void CC::propagate(Rect& R1, Rect& R2, Pos sep, int o,
                    const std::list<int>& L1, const std::list<int>& L2) {
-    assert(!L1.empty() && !L2.empty());
     std::list<int>::const_iterator i1=L1.begin(), i2=L2.begin();
-    //    assert(*i1 == *i2); // TODO: find better check, *i1 and *i2 must have merged, not be identical
-    ++i1; ++i2;
     if(i1 == L1.end()) { // Single contour
         assert(i2 == L2.end());
         return;
     }
     std::vector<DPoint>::iterator it;
-    int ic1 = root_continuum(*i1++);
-    int ic2 = root_continuum(*i2++);
-    int j1 = root_contour(*i1++);
-    int j2 = root_contour(*i2++);
-    float l1 = contours[j1].lvl;
-    float l2 = contours[j2].lvl;
+    int ic1, ic2, j1, j2; float l1, l2;
+    bool inc1=true, inc2=true;
     do {
-        if(l1 == l2) {
-            if(j1 != j2)
-                contours[j2].parent = j1;
+        if(inc1) {
+            assert(i1!=L1.end());
+            ic1 = root_continuum(*i1++);
+            j1 = continua[ic1].supCtr;
+            l1 = contours[j1].lvl;
+        }
+        if(inc2) {
+            assert(i2!=L2.end());
+            ic2 = root_continuum(*i2++);
+            j2 = continua[ic2].supCtr;
+            l2 = contours[j2].lvl;
+        }
+        inc1 = inc2 = true;
+        if(l1<l2) { // split continuum ic2
+            it = merge_mme(continua[ic1].mme, continua[ic2].mme, sep,o);
+            split_continuum(R1, R2, it, sep, ic2, ic1, (o+3)%4);
+            inc2 = false;
+        } else if(l2<l1) { // split continuum ic1
+            it = merge_mme(continua[ic2].mme, continua[ic1].mme, sep,o);
+            split_continuum(R2, R1, it, sep, ic1, ic2, o+1);
+            inc1 = false;
+        } else { // l1==l2
+            merge_contours(j1,j2);
             if(ic1 != ic2) {
                 merge_mme(continua[ic1].mme, continua[ic2].mme, sep,o);
                 continua[ic2].parent = ic1;
                 continua[ic2].mme.clear();
                 continua[ic2].mme.shrink_to_fit();
             }
-        } else if(l1<l2) { // split continuum ic2
-            it = merge_mme(continua[ic1].mme, continua[ic2].mme, sep,o);
-            split_continuum(R1, R2, it, sep, ic2, ic1, j1, (o+3)%4);
-        } else if(l2<l1) { // split continuum ic1
-            it = merge_mme(continua[ic2].mme, continua[ic1].mme, sep,o);
-            split_continuum(R2, R1, it, sep, ic1, ic2, j2, o+1);
-        }
-        float l1old=l1;
-        if(l1old <= l2) {
-            if(i1!=L1.end()) {
-                ic1 = root_continuum(*i1++);
-                assert(i1!=L1.end());
-                j1 = root_contour(*i1++);
-                l1 = contours[j1].lvl;
-            }
-        }
-        if(l1old >= l2) {
-            if(i2!=L2.end()) {
-                ic2 = root_continuum(*i2++);
-                assert(i2!=L2.end());
-                j2 = root_contour(*i2++);
-                l2 = contours[j2].lvl;
-            }
         }
     } while(i1!=L1.end() || i2!=L2.end());
-    ic1 = root_continuum(ic1);
-    ic2 = root_continuum(ic2);
-    if(ic1!=ic2) {
-        merge_mme(continua[ic1].mme, continua[ic2].mme, sep,o);
-        continua[ic2].parent = ic1;
-        continua[ic2].mme.clear();
-        continua[ic2].mme.shrink_to_fit();
-    }
 }
 
-/// Merge two adjacent rectangles, separated by vertical edges.
+/// Merge two adjacent rectangles.
 Rect CC::merge_rectangles(Rect& R1, Rect& R2) {
     int o = -1; // Relative orientation of R1 and R2. 0,1=horizontal,vertical
     if(R1.tl.x == R2.tl.x)

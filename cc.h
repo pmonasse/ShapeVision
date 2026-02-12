@@ -64,16 +64,18 @@ private:
     int root_contour(int i);
     int root_contour(Pos c) { return root_contour(idx(c)); }
     int root_continuum(int i);
-    void merge_contours(Pos c1, Pos c2);
+    void merge_contours(Pos c1, Pos c2) { merge_contours(idx(c1),idx(c2)); }
+    void merge_contours(int i1, int i2);
 
     int fill_simple_chainCode(std::list<int>& L, const float lvl[2],
                               const Pos v[2], const DPoint& dtl);
     Rect build_mme(Pos p, float lvl[4]);
-    void insert_chainCode(std::list<int>& L, int iSplit, int iCtn,int iCtr);
-    void mark_exit(Rect& R, int iSplit, int iCtn, int iCtr, int iSideIn);
+    void insert_chainCode(std::list<int>& L, int iSplit, int iCtn);
+    void mark_exit(Rect& R, int iSplit, int iCtn, int iSideIn);
+    bool mark_exit_side(std::list<int>& L, float v, int iSplit, int iCtn);
     void split_continuum(Rect& Rsrc, Rect& Rdst,
                          std::vector<DPoint>::iterator it, Pos sep,
-                         int iSplit, int iCtn, int iCtr, int iSideIn);
+                         int iSplit, int iCtn, int iSideIn);
     void propagate(Rect& R1, Rect& R2, Pos sep, int o,
                    const std::list<int>& L1, const std::list<int>& L2);
     Rect merge_rectangles(Rect& R1, Rect& R2);
