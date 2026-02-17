@@ -73,15 +73,12 @@ private:
     void insert_chainCode(std::list<int>& L, int iSplit, int iCtn);
     void mark_exit(Rect& R, int iSplit, int iCtn, int iSideIn);
     bool mark_exit_side(std::list<int>& L, float v, int iSplit, int iCtn);
-    void split_continuum(Rect& Rsrc, Rect& Rdst,
-                         std::vector<DPoint>::iterator it, Pos sep,
-                         int iSplit, int iCtn, int iSideIn);
+    void split_continuum(Rect& Rsrc, Rect& Rdst, int iSplit, int iCtn);
     void propagate(Rect& R1, Rect& R2, Pos sep, int o,
                    const std::list<int>& L1, const std::list<int>& L2);
     Rect merge_rectangles(Rect& R1, Rect& R2);
-    std::vector<DPoint>::iterator
-    merge_mme(std::vector<DPoint>& v1, std::vector<DPoint>& v2,
-              Pos sep, int o);
+    void merge_mme(std::vector<DPoint>& v1, std::vector<DPoint>& v2,
+                   Pos sep, int o);
 };
 
 #endif

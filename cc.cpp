@@ -213,19 +213,16 @@ bool CC::adjacent_rect(const DPoint& p, Pos sep, int o) const {
 /// When two continua meeting along edge of top-left \a sep have mme
 /// \a v1 and \a v2, append v2 to \a v1. They may have to be reordered so that
 /// the edge is no longer a boundary. The orientation of the edge is given by
-/// o (0=vertical, 1=horizontal).
-/// Return iterator to the first element of junction.
-std::vector<DPoint>::iterator
-CC::merge_mme(std::vector<DPoint>& v1, std::vector<DPoint>& v2, Pos sep, int o){
+/// \a o (0=vertical, 1=horizontal).
+void CC::merge_mme(std::vector<DPoint>& v1, std::vector<DPoint>& v2,
+                   Pos sep, int o) {
     const DPoint& p = v1.front();
     if(adjacent_rect(p, sep, o))
         reverse(v1.begin(), v1.end());
-    int n = v1.size();
     const DPoint& q = v2.back();
     if(adjacent_rect(q, sep, o))
         reverse(v2.begin(), v2.end());
     v1.insert(v1.end(), v2.begin(), v2.end());
-    return v1.begin()+n;
 }
 
 /// Return bottom-right corner of mme whose top-left corner is \a p.
@@ -270,32 +267,32 @@ bool CC::mark_exit_side(std::list<int>& L, float v, int iSplit, int iCtn) {
 
 /// Mark continuum \a iCtn and its sup-contour crossing the continuum of index
 /// \a iSplit. This is for the exit edge of the last mme of \a iSplit out of
-/// \a R. The side \a iSideIn (0..3), representing entry edge, must be skipped
+/// \a R. The side \a iEdgeIn (0..3), representing entry edge, must be skipped
 /// from the search of exit edge.
-void CC::mark_exit(Rect& R, int iSplit, int iCtn, int iSideIn) {
+void CC::mark_exit(Rect& R, int iSplit, int iCtn, int iEdgeIn) {
     const DPoint& p = continua[iSplit].mme.back();
     const int j = continua[iCtn].supCtr;
     const float v = contours[j].lvl;
-    if(iSideIn != 0 && p.y == R.tl.y) { // Upper edge
+    if(iEdgeIn != 0 && p.y == R.tl.y) { // Upper edge
         std::list<std::list<int>>::iterator i = R.chainCode[0].begin();
         std::advance(i, (int)p.x-R.tl.x);
         if( mark_exit_side(*i, v, iSplit, iCtn) )
             return;
     }
-    if(iSideIn != 3 && p.x == R.tl.x) { // Left edge
+    if(iEdgeIn != 3 && p.x == R.tl.x) { // Left edge
         std::list<std::list<int>>::iterator i = R.chainCode[3].begin();
         std::advance(i, (int)p.y-R.tl.y);
         if( mark_exit_side(*i, v, iSplit, iCtn) )
             return;
     }
     DPoint q = mme_br(p);
-    if(iSideIn != 1 && q.x == R.br.x) { // Right edge
+    if(iEdgeIn != 1 && q.x == R.br.x) { // Right edge
         std::list<std::list<int>>::iterator i = R.chainCode[1].begin();
         std::advance(i, (int)p.y-R.tl.y);
         if( mark_exit_side(*i, v, iSplit, iCtn) )
             return;
     }
-    if(iSideIn != 2 && q.y == R.br.y) { // Bottom edge
+    if(iEdgeIn != 2 && q.y == R.br.y) { // Bottom edge
         std::list<std::list<int>>::iterator i = R.chainCode[2].begin();
         std::advance(i, (int)p.x-R.tl.x);
         if( mark_exit_side(*i, v, iSplit, iCtn) )
@@ -304,52 +301,24 @@ void CC::mark_exit(Rect& R, int iSplit, int iCtn, int iSideIn) {
     assert(false);
 }
 
-/// Check if m<n=i or n<m=i.
-bool inside(int i, int m, int n) {
-    if(m>n)
-       std::swap(m,n);
-    return (m<i && i==n);
-}
-
 /// Given two adjacent mme, return the side of edge of \a dst that
 /// was crossed when coming from \a src.
 int find_side_entry(const DPoint& src, const DPoint& dst) {
     if((int)src.x!=(int)dst.x)
-    return 2+((int)dst.x-(int)src.x);
-  return 1-((int)dst.y-(int)src.y);
+        return 2+((int)dst.x-(int)src.x);
+    return 1-((int)dst.y-(int)src.y);
 }
 
 /// The continuum of index \a iSplit must be split by the sup-contour of
-/// continuum \a iCtn. The side \a iSideIn (0..3) is the entry direction.
-/// \a it points to the mme of entry.
-/// All crossings through edges at the same level as \a sep are recorded in
-/// the chain codes.
-void CC::split_continuum(Rect& Rsrc, Rect& Rdst,
-                         std::vector<DPoint>::iterator it, Pos sep,
-                         int iSplit, int iCtn, int iSideIn) {
-    const DPoint& p = *it;
-    const int dir = iSideIn&1; // adjacency of rects: 0=horizontal, 1=vertical
-    std::list<std::list<int>>::iterator i = Rdst.chainCode[iSideIn].begin();
-    std::advance(i, (int)p[dir]-Rdst.tl[dir]);
-    insert_chainCode(*i, iSplit, iCtn);
-    Rect* R[2] = {&Rsrc, &Rdst};
-    int ori[2] = {(iSideIn+2)%4, iSideIn};
-    int side=1;
-    std::vector<DPoint>::iterator itn=std::next(it),
-                                  end=continua[iCtn].mme.end();
-    const int dim=1-dir, lim=sep[dim];
-    for(; itn!=end; it=itn++)
-        if(inside(lim, (int)(*it)[dim], (int)(*itn)[dim])) { // Crossing
-           i = R[side]->chainCode[ori[side]].begin();
-           std::advance(i, (int)(*it)[dir]-Rsrc.tl[dir]);
-           insert_chainCode(*i, iSplit, iCtn);
-           side = 1-side;
-           i = R[side]->chainCode[ori[side]].begin();
-           std::advance(i, (int)(*it)[dir]-Rsrc.tl[dir]);
-           insert_chainCode(*i, iSplit, iCtn);
-        }
-    iSideIn = find_side_entry(*std::prev(it), *it);
-    mark_exit(*R[side], iSplit, iCtn, iSideIn);
+/// continuum \a iCtn. Record \a iCtn in the chain-code of the exit edge.
+void CC::split_continuum(Rect& Rsrc, Rect& Rdst, int iSplit, int iCtn) {
+    const std::vector<DPoint>& mme = continua[iCtn].mme;
+    assert(mme.size()>=2);
+    const DPoint& p = mme.back();
+    Rect& R = (Rsrc.tl.x<=p.x && p.x<Rsrc.br.x && // Find exit rect
+               Rsrc.tl.y<=p.y && p.y<Rsrc.br.y)? Rsrc: Rdst;
+    int iEdgeIn = find_side_entry(mme[mme.size()-2], p);
+    mark_exit(R, iSplit, iCtn, iEdgeIn);
     continua[iSplit].infCtr = continua[iCtn].supCtr;
 }
 
@@ -382,12 +351,12 @@ void CC::propagate(Rect& R1, Rect& R2, Pos sep, int o,
         }
         inc1 = inc2 = true;
         if(l1<l2) { // split continuum ic2
-            it = merge_mme(continua[ic1].mme, continua[ic2].mme, sep,o);
-            split_continuum(R1, R2, it, sep, ic2, ic1, (o+3)%4);
+            merge_mme(continua[ic1].mme, continua[ic2].mme, sep,o);
+            split_continuum(R1, R2, ic2, ic1);
             inc2 = false;
         } else if(l2<l1) { // split continuum ic1
-            it = merge_mme(continua[ic2].mme, continua[ic1].mme, sep,o);
-            split_continuum(R2, R1, it, sep, ic1, ic2, o+1);
+            merge_mme(continua[ic2].mme, continua[ic1].mme, sep,o);
+            split_continuum(R2, R1, ic1, ic2);
             inc1 = false;
         } else { // l1==l2
             merge_contours(j1,j2);
