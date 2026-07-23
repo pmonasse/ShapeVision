@@ -7,6 +7,7 @@
  */
 
 #include "cc.h"
+#include <map>
 #include <algorithm>
 #include <cassert>
 
@@ -447,4 +448,41 @@ CC::CC(const float* im, int w, int h): R(Pos(0,0),Pos(w-1,h-1)), w(w), h(h) {
         h2=(h2+1)/2;
     }
     std::swap(R, rects.back());
+    canonize();
+}
+
+/// Remove union info of contours and continua by referencing only roots.
+void CC::canonize() {
+    // Contours: change root to the first in scan order
+    for(int i=0, end=2*w*h; i<end; i++) {
+        int j=root_contour(i);
+        if(j>i) {
+            contours[j].parent = i;
+            contours[i].parent = -1;
+        }
+    }
+    // Continua: compute pack and normalize inf-/sup-contour
+    std::map<int,int> packIdx;
+    std::vector<Continuum>::iterator it=continua.begin(), end=continua.end();
+    for(int i=0; it!=end; ++it, ++i)
+        if(it->parent<0) {
+            packIdx[i] = (int)packIdx.size();
+            it->infCtr = root_contour(it->infCtr);
+            it->supCtr = root_contour(it->supCtr);
+        }
+    // Update chain-codes to pack index
+    for(int i=0; i<4; i++) {
+        std::list<std::list<int>>::iterator j=R.chainCode[i].begin(), jend;
+        for(jend=R.chainCode[i].end(); j!=jend; ++j) {
+            std::list<int>::iterator k=j->begin(), kend=j->end();
+            for(; k!=kend; ++k)
+                *k = packIdx[root_continuum(*k)];
+        }
+    }
+    // Pack the continua
+    it=continua.begin();
+    for(int i=0; it!=end; ++it, ++i)
+        if(it->parent<0 && packIdx[i]<i)
+            continua[packIdx[i]] = std::move(*it);
+    continua.erase(continua.begin()+packIdx.size(), continua.end());
 }

@@ -79,6 +79,7 @@ private:
     Rect merge_rectangles(Rect& R1, Rect& R2);
     void merge_mme(std::vector<DPoint>& v1, std::vector<DPoint>& v2,
                    Pos sep, int o);
+    void canonize();
 };
 
 #endif
