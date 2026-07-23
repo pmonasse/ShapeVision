@@ -11,6 +11,27 @@
 #include "cc.h"
 using namespace std;
 
+void display_stats(const CC& cc) {
+    std::cout << "dual pixels: " << (cc.w-1)*(cc.h-1) << ", ";
+    int n=0;
+    for(int i=0, end=2*cc.w*cc.h; i<end; i++)
+        if(cc.contours[i].parent<0 && cc.contours[i].p.x>=0)
+            ++n;
+    std::cout << "contours: " << n << ", ";
+    n = 0;
+    for(int i=0; i<4; i++) {
+        std::list<std::list<int>>::const_iterator it=cc.R.chainCode[i].begin(),
+            end=cc.R.chainCode[i].end();
+        for(; it!=end; ++it)
+            n += it->size();
+    }
+    assert(n%2 == 0);
+    n /= 2;
+    std::cout << "continua: " << cc.continua.size() << " ("
+              << n << " open, " << cc.continua.size()-n << " closed)"
+              << std::endl;
+}
+
 /** \mainpage ShapeVision.
   * Persistence maps of image obtained by bilinear interpolation of the samples.
 */
@@ -46,7 +67,8 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    CC cc(im,(int)w,(int)h); // Will do something with it later...
+    CC cc(im,(int)w,(int)h);
+    display_stats(cc);
 
     free(im);
     return 0;
