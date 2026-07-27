@@ -7,7 +7,9 @@
  */
 
 #include "cc.h"
+#include "maxTree.h"
 #include <map>
+#include <stack>
 #include <algorithm>
 #include <cassert>
 
@@ -449,6 +451,7 @@ CC::CC(const float* im, int w, int h): R(Pos(0,0),Pos(w-1,h-1)), w(w), h(h) {
     }
     std::swap(R, rects.back());
     canonize();
+    persistence();
 }
 
 /// Remove union info of contours and continua by referencing only roots.
@@ -485,4 +488,114 @@ void CC::canonize() {
         if(it->parent<0 && packIdx[i]<i)
             continua[packIdx[i]] = std::move(*it);
     continua.erase(continua.begin()+packIdx.size(), continua.end());
+}
+
+/// Functor for the comparison of levels of contour. Must be a strict order.
+template<typename Predicate>
+struct CmpCtr {
+    Predicate pred;
+    const Contour* ctr;
+    CmpCtr(const Contour* c): pred(), ctr(c) {}
+    bool operator()(int i, int j) const {
+        // Put spurious saddle contours at the end
+        if(ctr[i].lvl<0)
+            return false;
+        if(ctr[j].lvl<0)
+            return true;
+        return pred(ctr[i].lvl, ctr[j].lvl);
+    }
+};
+
+/// Functior for neighborhood.
+/// Edges are provided at construction as a vector giving for each point the
+/// indexed of its neigbhors.
+struct NbhCtr {
+    using iterator = std::vector<int>::const_iterator;
+    const std::vector<std::vector<int>>& edges;
+    NbhCtr(const std::vector<std::vector<int>>& e): edges(e) {}
+    std::pair<iterator,iterator> operator()(int i) const {
+        return std::make_pair(edges[i].begin(), edges[i].end());
+    }
+};
+
+/// Given parent map of max-tree, find number of children for each node.
+/// The result has the same size as the parent map. Only canonical points
+/// (including roots) get a non-negative value. \a ctr allows the identification
+/// of canonical elements. Spurious saddle points also get negative value.
+std::vector<int> count_children(const std::vector<int>& par,
+                                const Contour* ctr) {
+    const int n=(int)par.size();
+    std::vector<int> nChildren(n,-1);
+    for(int i=0; i!=n; ++i) {
+        if(ctr[i].parent>=0 || ctr[i].p.x<0)
+            continue; // Non-canonical contour or spurious saddle point
+        if(par[i]==i || ctr[par[i]].lvl!=ctr[i].lvl) {
+            if(nChildren[i]<0)
+                nChildren[i]=0;
+            if(nChildren[par[i]]<0)
+                nChildren[par[i]]=1;
+            else if(par[i]!=i)
+                ++nChildren[par[i]];
+        }
+    }
+    return nChildren;
+}
+
+/// Given count of children of nodes of tree, find leaves.
+std::vector<int> find_leaves(const std::vector<int>& nChildren) {
+    std::vector<int> leaves;
+    int n = (int)nChildren.size();
+    for(int i=0; i<n; i++)
+        if(nChildren[i]==0)
+            leaves.push_back(i);
+    return leaves;
+}
+
+void CC::persistence() {
+    const int n = 2*w*h;
+    // Record neighbors
+    std::vector<std::vector<int>> edges(n);
+    std::vector<Continuum>::const_iterator it, end=continua.end();
+    for(it=continua.begin(); it!=end; ++it) {
+        edges[it->supCtr].push_back(it->infCtr);
+        edges[it->infCtr].push_back(it->supCtr);
+    }
+    CmpCtr<std::less<float>> cmp(contours);
+    NbhCtr nbh(edges);
+    std::vector<int> par = max_tree(n, cmp, nbh);
+    std::vector<int> nChildren = count_children(par, contours);
+    // tabMax points: to the maximum associated to a node
+    // - to persistence contour for a maximum (must be a saddle point)
+    // - to the associated maximum otherwise.
+    // The global maximum points to itself.
+    std::vector<int> tagMax(n,-1);
+    // Collect leaves (maxima) into stack
+    std::stack<int> front;
+    for(int i=0; i<n; i++)
+        if(nChildren[i]==0) {
+            tagMax[i] = i;
+            front.push(i);
+        }
+    // Propagate tagMax
+     while(! front.empty()) {
+        int i = front.top(); front.pop();
+        int j = par[i];
+        if(i==j)
+            continue;
+        if(tagMax[j]>=0) { // Already a max associated to parent
+            if(cmp(tagMax[i],tagMax[j]))
+                tagMax[tagMax[i]] = j; // Dominated max, point to j
+            else { // Dominating max
+                tagMax[tagMax[j]] = j; // Make dominated max point to j
+                tagMax[j] = tagMax[i]; // New max associated to parent
+            }
+        } else
+            tagMax[j] = tagMax[i];
+        if(--nChildren[j]==0) // This was last child of parent
+            front.push(j); // Propagate further dominating max
+     }
+     // When here, max have tagMax point to their persistence limit node;
+     // other nodes have tagMax point to their dominant max.
+     nChildren = count_children(par, contours);
+     std::vector<int> leaves = find_leaves(nChildren);
 }

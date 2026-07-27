@@ -30,6 +30,7 @@ add_executable(shapeVision
     io_png.c io_png.h
     cmdLine.h
     cc.h cc.cpp
+    maxTree.h
     shapeVision.cpp)
 
 target_link_libraries(shapeVision PRIVATE PNG::PNG)

@@ -80,6 +80,7 @@ private:
     void merge_mme(std::vector<DPoint>& v1, std::vector<DPoint>& v2,
                    Pos sep, int o);
     void canonize();
+    void persistence();
 };
 
 #endif
