@@ -561,7 +561,7 @@ std::vector<int> persistence_ext(const Contour* ctr, int n,
     std::vector<int> par = max_tree(n, cmp, nbh);
     std::vector<int> nChildren = count_children(par, ctr);
     tag = std::vector<int>(n,-1);
-    // Collect leaves (maxima) into stack
+    // Collect leaves (extrema) into stack
     std::vector<int> leaves;
     for(int i=0; i<n; i++)
         if(nChildren[i]==0)
@@ -577,17 +577,17 @@ std::vector<int> persistence_ext(const Contour* ctr, int n,
         int j = par[i];
         if(i==j)
             continue;
-        if(tag[j]>=0) { // Already a max associated to parent
+        if(tag[j]>=0) { // Already an extremum associated to parent
             if(cmp(tag[i],tag[j]))
-                tag[tag[i]] = j; // Dominated max, point to j
-            else { // Dominating max
-                tag[tag[j]] = j; // Make dominated max point to j
-                tag[j] = tag[i]; // New max associated to parent
+                tag[tag[i]] = j; // Dominated extemum, point to j
+            else { // Dominating extremum
+                tag[tag[j]] = j; // Make dominated extremum point to j
+                tag[j] = tag[i]; // New extremum associated to parent
             }
         } else
             tag[j] = tag[i];
         if(--nChildren[j]==0) // This was last child of parent
-            front.push(j); // Propagate further dominating max
+            front.push(j); // Propagate further dominating extremum
     }
     return leaves;
 }
