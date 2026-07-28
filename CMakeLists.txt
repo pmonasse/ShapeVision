@@ -38,5 +38,3 @@ target_link_libraries(shapeVision PRIVATE PNG::PNG)
 if(CMAKE_CXX_COMPILER_ID MATCHES "(GNU)|(CLANG)")
   set_target_properties(shapeVision PROPERTIES COMPILE_FLAGS "-Wall -Wextra")
 endif()
-
-add_executable(testRect testRect.cpp cc.h cc.cpp)
