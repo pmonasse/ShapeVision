@@ -549,9 +549,9 @@ std::vector<int> count_children(const std::vector<int>& par,
 /// \param[out] tag is a tag associated each node.
 /// \return nodes corresponding to extrema (of type according to \a cmp).
 /// tag points to the extremum associated to a node:
-/// - to persistence contour for a maximum
-/// - to the associated maximum otherwise.
-/// The global maximum points to itself.
+/// - to persistence contour for an extremum
+/// - to the associated extremmum otherwise.
+/// The global extremmum points to itself.
 template <typename Cmp>
 std::vector<int> persistence_ext(const Contour* ctr, int n,
                                  const std::vector<std::vector<int>>& edges,
