@@ -81,4 +81,10 @@ std::vector<int> max_tree(int n, const Comparator& cmp, Neighborhood& nbh,
     return par;
 }
 
+/// Return canonical element of node \a i.
+template<typename Comparator>
+int canonical(int i, const std::vector<int>& par, const Comparator& cmp) {
+    return cmp(par[i],i)? i: par[i];
+}
+
 #endif

@@ -546,6 +546,7 @@ std::vector<int> count_children(const std::vector<int>& par,
 /// \param ctr nodes of the graph.
 /// \param n number of nodes.
 /// \param edges gives for each node index its neighbors.
+/// \param[out] par parent map.
 /// \param[out] tag is a tag associated each node.
 /// \return nodes corresponding to extrema (of type according to \a cmp).
 /// tag points to the extremum associated to a node:
@@ -556,9 +557,9 @@ template <typename Cmp>
 std::vector<int> persistence_ext(const Contour* ctr, int n,
                                  const std::vector<std::vector<int>>& edges,
                                  const Cmp& cmp,
-                                 std::vector<int>& tag) {
+                                 std::vector<int>& par, std::vector<int>& tag) {
     NbhCtr nbh(edges);
-    std::vector<int> par = max_tree(n, cmp, nbh);
+    par = max_tree(n, cmp, nbh);
     std::vector<int> nChildren = count_children(par, ctr);
     tag = std::vector<int>(n,-1);
     // Collect leaves (extrema) into stack
@@ -603,9 +604,24 @@ void CC::persistence() {
     }
     CmpCtr<std::less<float>> cmpMax(contours);
     CmpCtr<std::greater<float>> cmpMin(contours);
-    std::vector<int> tagMax, tagMin;
+    std::vector<int> tagMax, tagMin, parMax, parMin;
     std::vector<int> maxima = persistence_ext(contours, 2*w*h, edges, cmpMax,
-                                              tagMax);
+                                              parMax, tagMax);
     std::vector<int> minima = persistence_ext(contours, 2*w*h, edges, cmpMin,
-                                              tagMin);
+                                              parMin, tagMin);
+
+    std::vector<std::vector<int>> boundariesMax(maxima.size());
+    for(int i=0, n=(int)continua.size(); i!=n; i++) {
+        int j = canonical(continua[i].supCtr, parMax, cmpMax);
+        int k = tagMax[j];
+        if(contours[k].lvl > contours[j].lvl)
+            j = k;
+        k = canonical(continua[i].infCtr, parMax, cmpMax);
+        if(tagMax[k]!=j) {
+            std::vector<int>::const_iterator it =
+                std::lower_bound(maxima.begin(), maxima.end(), j);
+            assert(it!=maxima.end() && *it==j);
+            boundariesMax[it-maxima.begin()].push_back(i);
+        }
+    }
 }
