@@ -489,6 +489,48 @@ void CC::canonize() {
         if(it->parent<0 && packIdx[i]<i)
             continua[packIdx[i]] = std::move(*it);
     continua.erase(continua.begin()+packIdx.size(), continua.end());
+    // Fill fields sideIn and sideOut
+    for(int i=0; i<4; i++) {
+        std::list<std::list<int>>::iterator j=R.chainCode[i].begin(), jend;
+        for(jend=R.chainCode[i].end(); j!=jend; ++j) {
+            std::list<int>::iterator k=j->begin(), kend=j->end();
+            for(; k!=kend; ++k) {
+                Continuum& c = continua[*k];
+                set_side_io(c, i);
+            }
+        }
+    }
+}
+
+/// Indicate if the \a side of \a mme is at the border of the domain.
+bool CC::at_border(const DPoint& mme, int side) const {
+    switch(side) {
+    case 0: return mme.y==0;
+    case 1: return mme_br(mme).x==w-1;
+    case 2: return mme_br(mme).y==h-1;
+    case 3: return mme.x==0;
+    default: assert(false);
+    }
+}
+
+/// Fill field \c sideIn or \c sideOut of continuum \a c with value \a side.
+void CC::set_side_io(Continuum& c, int side) {
+    if(c.sideIn>=0) {
+        assert(c.sideOut<0);
+        assert(at_border(c.mme.back(),side));
+        c.sideOut = side;
+    } else if(c.sideOut>=0) {
+        assert(c.sideIn<0);
+        assert(at_border(c.mme.front(),side));
+        c.sideIn = side;
+    } else {
+        if(at_border(c.mme.front(),side))
+            c.sideIn = side;
+        else {
+            assert(at_border(c.mme.back(),side));
+            c.sideOut = side;
+        }
+    }
 }
 
 /// Functor for the comparison of levels of contour. Must be a strict order.
@@ -593,6 +635,38 @@ std::vector<int> persistence_ext(const Contour* ctr, int n,
     return leaves;
 }
 
+/// Return a vector of same size as \a ext (vector of maxima or of minima)
+/// storing for each the contours involved in the boundary of its persistence
+/// region. The persistence region is implicitly stored in \a par and \a tag.
+/// \sa persistence_ext
+template <typename Cmp>
+std::vector<std::vector<int>>
+CC::find_bound_contours(const Cmp& cmp,
+                        const std::vector<int>& par,
+                        const std::vector<int>& tag,
+                        const std::vector<int>& ext,
+                        bool isMaxTree) const {
+    int Continuum::*ctrIn=&Continuum::supCtr;
+    int Continuum::*ctrOut=&Continuum::infCtr;
+    if(!isMaxTree)
+        std::swap(ctrIn, ctrOut); 
+    std::vector<std::vector<int>> boundaries(ext.size());
+    for(int i=0, n=(int)continua.size(); i!=n; i++) {
+        int j = canonical(continua[i].*ctrIn, par, cmp);
+        int k = tag[j];
+        if(cmp(j,k)) //contours[k].lvl > contours[j].lvl)
+            j = k;
+        k = canonical(continua[i].*ctrOut, par, cmp);
+        if(tag[k]!=j) {
+            std::vector<int>::const_iterator it =
+                std::lower_bound(ext.begin(), ext.end(), j);
+            assert(it!=ext.end() && *it==j);
+            boundaries[it-ext.begin()].push_back(i);
+        }
+    }
+    return boundaries;
+}
+
 /// Compute persistence maps.
 void CC::persistence() {
     // Record neighbors
@@ -610,18 +684,8 @@ void CC::persistence() {
     std::vector<int> minima = persistence_ext(contours, 2*w*h, edges, cmpMin,
                                               parMin, tagMin);
 
-    std::vector<std::vector<int>> boundariesMax(maxima.size());
-    for(int i=0, n=(int)continua.size(); i!=n; i++) {
-        int j = canonical(continua[i].supCtr, parMax, cmpMax);
-        int k = tagMax[j];
-        if(contours[k].lvl > contours[j].lvl)
-            j = k;
-        k = canonical(continua[i].infCtr, parMax, cmpMax);
-        if(tagMax[k]!=j) {
-            std::vector<int>::const_iterator it =
-                std::lower_bound(maxima.begin(), maxima.end(), j);
-            assert(it!=maxima.end() && *it==j);
-            boundariesMax[it-maxima.begin()].push_back(i);
-        }
-    }
+    std::vector<std::vector<int>> boundariesMax =
+        find_bound_contours(cmpMax, parMax, tagMax, maxima, true);
+    std::vector<std::vector<int>> boundariesMin =
+        find_bound_contours(cmpMin, parMin, tagMin, minima, false);
 }

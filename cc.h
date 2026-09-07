@@ -37,7 +37,9 @@ struct Continuum {
     int parent; ///< Identify merges
     int infCtr, supCtr; ///< Inf and sup contour indexes
     std::vector<DPoint> mme; ///< Monotone mesh elements
-    Continuum(int inf, int sup): parent(-1), infCtr(inf), supCtr(sup) {}
+    int sideIn, sideOut; ///< Sides of entry/exit in/from image, -1 if band
+    Continuum(int inf, int sup)
+    : parent(-1), infCtr(inf), supCtr(sup), sideIn(-1), sideOut(-1) {}
 };
 
 struct Rect {
@@ -80,7 +82,16 @@ private:
     void merge_mme(std::vector<DPoint>& v1, std::vector<DPoint>& v2,
                    Pos sep, int o);
     void canonize();
+    void set_side_io(Continuum& c, int side);
+    bool at_border(const DPoint& mme, int side) const;
     void persistence();
+    template <typename Cmp>
+    std::vector<std::vector<int>>
+    find_bound_contours(const Cmp& cmp,
+                        const std::vector<int>& par,
+                        const std::vector<int>& tag,
+                        const std::vector<int>& ext,
+                        bool isMaxTree) const;
 };
 
 #endif
