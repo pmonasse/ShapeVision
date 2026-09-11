@@ -96,8 +96,8 @@ Pos CC::create_saddle(Pos p, const float lvl[4]) {
     c.p = pos2DPoint(p);
     float num=   lvl[0]*lvl[2] - lvl[1]*lvl[3];
     float denom=(lvl[0]+lvl[2])-(lvl[1]+lvl[3]);
-    c.p.x += (lvl[0]-lvl[1])/denom;
-    c.p.y += (lvl[0]-lvl[3])/denom;
+    c.p.x += (lvl[0]-lvl[3])/denom;
+    c.p.y += (lvl[0]-lvl[1])/denom;
     c.lvl = num/denom;
     // The code relies on the following properties, not guaranteed with float
     assert(c.p.x!=(int)c.p.x);
@@ -492,45 +492,41 @@ void CC::canonize() {
     // Fill fields sideIn and sideOut
     for(int i=0; i<4; i++) {
         std::list<std::list<int>>::iterator j=R.chainCode[i].begin(), jend;
-        for(jend=R.chainCode[i].end(); j!=jend; ++j) {
+        int coord=0;
+        for(jend=R.chainCode[i].end(); j!=jend; ++j, coord++) {
             std::list<int>::iterator k=j->begin(), kend=j->end();
             for(; k!=kend; ++k) {
                 Continuum& c = continua[*k];
-                set_side_io(c, i);
+                set_side_io(c, i, coord);
             }
         }
     }
 }
 
 /// Indicate if the \a side of \a mme is at the border of the domain.
-bool CC::at_border(const DPoint& mme, int side) const {
-    switch(side) {
-    case 0: return mme.y==0;
-    case 1: return mme_br(mme).x==w-1;
-    case 2: return mme_br(mme).y==h-1;
-    case 3: return mme.x==0;
-    default: assert(false);
-    }
+bool CC::at_border(const DPoint& mme, int side, int coord) const {
+    if(side==0)
+        return (int)mme.x==coord && mme.y==0;
+    if(side==3)
+        return mme.x==0 && (int)mme.y==coord;
+    DPoint p = mme_br(mme);
+    if(side==1)
+        return p.x==w-1 && (int)mme.y==coord;
+    else // side==2
+        return (int)mme.x==coord && p.y==h-1;
 }
 
 /// Fill field \c sideIn or \c sideOut of continuum \a c with value \a side.
-void CC::set_side_io(Continuum& c, int side) {
-    if(c.sideIn>=0) {
-        assert(c.sideOut<0);
-        assert(at_border(c.mme.back(),side));
-        c.sideOut = side;
-    } else if(c.sideOut>=0) {
-        assert(c.sideIn<0);
-        assert(at_border(c.mme.front(),side));
+void CC::set_side_io(Continuum& c, int side, int coord) {
+    if(c.sideIn<0 && at_border(c.mme.front(), side, coord)) {
         c.sideIn = side;
-    } else {
-        if(at_border(c.mme.front(),side))
-            c.sideIn = side;
-        else {
-            assert(at_border(c.mme.back(),side));
-            c.sideOut = side;
-        }
+        return;
     }
+    if(c.sideOut<0 && at_border(c.mme.back(), side, coord)) {
+        c.sideOut = side;
+        return;
+    }
+    assert(false);
 }
 
 /// Functor for the comparison of levels of contour. Must be a strict order.
@@ -667,6 +663,16 @@ CC::find_bound_contours(const Cmp& cmp,
     return boundaries;
 }
 
+/// Compute persistence levels of extrema \a ext.
+std::vector<float> CC::persistence_levels(const std::vector<int>& ext,
+                                          const std::vector<int>& tag) const {
+    size_t n = ext.size();
+    std::vector<float> levels(n);
+    for(size_t i=0; i<n; i++)
+        levels[i] = contours[tag[ext[i]]].lvl;
+    return levels;
+}
+
 /// Compute persistence maps.
 void CC::persistence() {
     // Record neighbors
@@ -679,13 +685,12 @@ void CC::persistence() {
     CmpCtr<std::less<float>> cmpMax(contours);
     CmpCtr<std::greater<float>> cmpMin(contours);
     std::vector<int> tagMax, tagMin, parMax, parMin;
-    std::vector<int> maxima = persistence_ext(contours, 2*w*h, edges, cmpMax,
-                                              parMax, tagMax);
-    std::vector<int> minima = persistence_ext(contours, 2*w*h, edges, cmpMin,
-                                              parMin, tagMin);
+    maxima = persistence_ext(contours, 2*w*h, edges, cmpMax, parMax, tagMax);
+    minima = persistence_ext(contours, 2*w*h, edges, cmpMin, parMin, tagMin);
 
-    std::vector<std::vector<int>> boundariesMax =
-        find_bound_contours(cmpMax, parMax, tagMax, maxima, true);
-    std::vector<std::vector<int>> boundariesMin =
-        find_bound_contours(cmpMin, parMin, tagMin, minima, false);
+    persistLevelMax = persistence_levels(maxima, tagMax);
+    persistLevelMin = persistence_levels(minima, tagMin);
+    
+    boundariesMax = find_bound_contours(cmpMax, parMax, tagMax, maxima, true);
+    boundariesMin = find_bound_contours(cmpMin, parMin, tagMin, minima, false);
 }

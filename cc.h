@@ -54,13 +54,16 @@ struct CC {
     std::vector<Continuum> continua;
     Rect R;
     int w,h;
+    std::vector<int> maxima, minima;
+    std::vector<float> persistLevelMax, persistLevelMin;
+    std::vector<std::vector<int>> boundariesMax, boundariesMin;
     CC(const float* im, int w, int h);
 
     int idx(int x, int y) const { return y*w+x; }
     int idx(Pos p) const { return idx(p.x,p.y); }
+    DPoint mme_br(const DPoint& p) const;
 private:
     bool adjacent_rect(const DPoint& p, Pos sep, int o) const;
-    DPoint mme_br(const DPoint& p) const;
     Pos create_saddle(Pos p, const float lvl[4]);
     int create_continuum(Pos inf, Pos sup, const DPoint& p);
     int root_contour(int i);
@@ -82,9 +85,11 @@ private:
     void merge_mme(std::vector<DPoint>& v1, std::vector<DPoint>& v2,
                    Pos sep, int o);
     void canonize();
-    void set_side_io(Continuum& c, int side);
-    bool at_border(const DPoint& mme, int side) const;
+    void set_side_io(Continuum& c, int side, int coord);
+    bool at_border(const DPoint& mme, int side, int coord) const;
     void persistence();
+    std::vector<float> persistence_levels(const std::vector<int>& ext,
+                                          const std::vector<int>& tag) const;
     template <typename Cmp>
     std::vector<std::vector<int>>
     find_bound_contours(const Cmp& cmp,

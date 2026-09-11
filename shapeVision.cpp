@@ -3,13 +3,56 @@
  * @file shapeVision.cpp
  * @brief shapeVision: Persistence map of bilinear image
  * @author Pascal Monasse <pascal.monasse@enpc.fr>
- * @date 2025
+ * @date 2025-2026
  */
 
 #include "cmdLine.h"
 #include "io_png.h"
 #include "cc.h"
-using namespace std;
+#include "sample_ll.h"
+#include "draw_curve.h"
+#include <cmath>
+
+struct TransformZoom : public TransformPoint {
+    int z;
+    TransformZoom(int zoom=1): z(zoom) {}
+    DPoint operator()(const DPoint& p) const {
+        return DPoint(z*p.x, z*p.y);
+    }
+};
+
+struct color_t {
+    unsigned char r,g,b;
+    color_t(): r(255), g(255), b(255) {}
+    color_t(unsigned char r0, unsigned char g0, unsigned char b0)
+    :r(r0),g(g0),b(b0) {}
+};
+
+bool output_persistence(const CC& cc,
+                        const std::vector<int>& ext,
+                        const std::vector<float>& lvl,
+                        const std::vector<std::vector<int>>& boundaries,
+                        const float* data,
+                        const std::string& file, const TransformPoint& t) {
+    DPoint tl(0,0);
+    tl = t(tl);
+    DPoint br(cc.w-1, cc.h-1);
+    br = t(br);
+    int w=std::ceil(br.x-tl.x)+1, h=std::ceil(br.y-tl.y)+1;
+    color_t* im = new color_t[w*h];
+    for(size_t i=0, n=ext.size(); i<n; i++) {
+        float v = lvl[i];
+        std::vector<int>::const_iterator it, end=boundaries[i].end();
+        for(it=boundaries[i].begin(); it!=end; ++it) {
+            std::vector<DPoint> curve =
+                sample_ll(cc.continua[*it], v, cc, data, 5);
+            draw_curve(curve, color_t(255,0,0), im, w, h, t);
+        }
+    }
+    bool ok=(0==io_png_write_u8(file.c_str(),(unsigned char*)im,w,h,3));
+    delete [] im;
+    return ok;
+}
 
 void display_stats(const CC& cc) {
     std::cout << "dual pixels: " << (cc.w-1)*(cc.h-1) << ", ";
@@ -38,16 +81,14 @@ void display_stats(const CC& cc) {
 int main(int argc, char* argv[]) { 
     // parse arguments
     CmdLine cmd;
-
-    /*    int nScales=0;
-    float grad=0;
-    
-    // options
-    cmd.add( make_option('s', nScales, "scales")
-             .doc("nb scales (0=automatic)") );
-    cmd.add( make_option('g', grad, "gradient")
-             .doc("Min gradient norm (0=automatic)") );
-    */
+    int z=1;
+    std::string min, max;
+    cmd.add( make_option('m', min, "min")
+             .doc("min-persistence output image") );
+    cmd.add( make_option('M', max, "max")
+             .doc("max-persistence output image") );
+    cmd.add( make_option('z', z, "zoom")
+             .doc("Zoom factor (integer) for output images") );
     try {
         cmd.process(argc, argv);
     } catch(const std::string& s) {
@@ -55,21 +96,34 @@ int main(int argc, char* argv[]) {
         return 1;
     }
     if(argc != 2) {
-        cerr << "Usage: " << argv[0] << " [options] imgIn.png\n"
-             << cmd;
+        std::cerr << "Usage: " << argv[0] << " [options] imgIn.png\n"
+                  << cmd;
         return 1;
     }
 
     size_t w, h;
     float* im = io_png_read_f32_gray(argv[1], &w, &h);
     if(! im) {
-        cerr << "Unable to load image " << argv[1] << endl;
+        std::cerr << "Unable to load image " << argv[1] << std::endl;
         return 1;
     }
 
+    TransformZoom zoom(z);
     CC cc(im,(int)w,(int)h);
     display_stats(cc);
-
+    if(! min.empty() &&
+       !output_persistence(cc, cc.minima, cc.persistLevelMin, cc.boundariesMin,
+                           im, min, zoom)) {
+        std::cerr << "Error saving image file " << min << std::endl;
+        return 1;
+    }
+    if(! max.empty() &&
+       !output_persistence(cc, cc.maxima, cc.persistLevelMax, cc.boundariesMax,
+                           im, max, zoom)) {
+        std::cerr << "Error saving image file " << max << std::endl;
+        return 1;
+    }
+    
     free(im);
     return 0;
 }

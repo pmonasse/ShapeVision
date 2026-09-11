@@ -30,6 +30,8 @@ add_executable(shapeVision
     io_png.c io_png.h
     cmdLine.h
     cc.h cc.cpp
+    sample_ll.h sample_ll.cpp
+    draw_curve.h draw_curve.cpp
     maxTree.h
     shapeVision.cpp)
 
