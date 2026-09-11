@@ -13,7 +13,6 @@
 
 /// Sample level line in a continuum.
 std::vector<DPoint> sample_ll(const Continuum& ctn, float level,
-                              const CC& cc, const float* data,
-                              int ptsPixel);
+                              const CC& cc, int ptsPixel);
 
 #endif

@@ -145,13 +145,13 @@ int find_side_entry(const DPoint& mmeFrom, const DPoint& mmeTo, const CC& cc) {
 /// \param cc contours and continua
 /// \param data image values.
 DPoint border_point_ll(Pos pos, int side, float level, float levels[4],
-                       const CC& cc, const float* data) {
+                       const CC& cc) {
     // p[i]+delta[i]=p[i+1] if p spans clockwise the corners of unit square
     static const Pos delta[] = {{+1,0}, {0,+1}, {-1,0}, {0,-1}};
     int i = cc.idx(pos);
     int idx[4] = {i, i+1, i+cc.w+1, i+cc.w};
     for(int j=0; j<4; j++)
-        levels[j] = data[idx[j]];
+        levels[j] = cc.contours[idx[j]].lvl;
     int sideNext = (side+1) & 3; // 4->0
     float t = lerp(levels[side], level, levels[sideNext]);
     assert(0<=t && t<=1);
@@ -163,17 +163,15 @@ DPoint border_point_ll(Pos pos, int side, float level, float levels[4],
 /// \param ctn the continuum.
 /// \param level the value at level line, between inf- and sup-contour levels
 /// \param cc the contours & continua structure containing \a ctn.
-/// \param data the values of pixels in a 1D array.
 /// \param ptsPixel number of points of discretization per pixel.
 std::vector<DPoint> sample_ll(const Continuum& ctn, float level,
-                              const CC& cc, const float* data,
-                              int ptsPixel) {
+                              const CC& cc, int ptsPixel) {
     int side = ctn.sideIn;
     if(side<0)
         side = find_side_entry(ctn.mme.back(), ctn.mme.front(), cc);
     Pos pos((short)ctn.mme.front().x, (short)ctn.mme.front().y);
     float levels[4];
-    DPoint p = border_point_ll(pos, side, level, levels, cc, data);
+    DPoint p = border_point_ll(pos, side, level, levels, cc);
     std::vector<DPoint> ll;
     ll.push_back(p);
     for(size_t i=0, n=ctn.mme.size(); i!=n; i++) {
@@ -185,7 +183,7 @@ std::vector<DPoint> sample_ll(const Continuum& ctn, float level,
         } else
             side = find_side_entry(ctn.mme[i+1], ctn.mme[i], cc);
         Pos pos((short)ctn.mme[i].x, (short)ctn.mme[i].y);
-        DPoint q = border_point_ll(pos, side, level, levels, cc, data);
+        DPoint q = border_point_ll(pos, side, level, levels, cc);
         // Compute hyperbola equation
         DPoint p = ll.back();
         Hyperbola h(pos, p, levels, level);

@@ -32,7 +32,6 @@ bool output_persistence(const CC& cc,
                         const std::vector<int>& ext,
                         const std::vector<float>& lvl,
                         const std::vector<std::vector<int>>& boundaries,
-                        const float* data,
                         const std::string& file, const TransformPoint& t) {
     DPoint tl(0,0);
     tl = t(tl);
@@ -45,7 +44,7 @@ bool output_persistence(const CC& cc,
         std::vector<int>::const_iterator it, end=boundaries[i].end();
         for(it=boundaries[i].begin(); it!=end; ++it) {
             std::vector<DPoint> curve =
-                sample_ll(cc.continua[*it], v, cc, data, 5);
+                sample_ll(cc.continua[*it], v, cc, 5);
             draw_curve(curve, color_t(255,0,0), im, w, h, t);
         }
     }
@@ -113,17 +112,17 @@ int main(int argc, char* argv[]) {
     display_stats(cc);
     if(! min.empty() &&
        !output_persistence(cc, cc.minima, cc.persistLevelMin, cc.boundariesMin,
-                           im, min, zoom)) {
+                           min, zoom)) {
         std::cerr << "Error saving image file " << min << std::endl;
         return 1;
     }
     if(! max.empty() &&
        !output_persistence(cc, cc.maxima, cc.persistLevelMax, cc.boundariesMax,
-                           im, max, zoom)) {
+                           max, zoom)) {
         std::cerr << "Error saving image file " << max << std::endl;
         return 1;
     }
-    
+
     free(im);
     return 0;
 }
