@@ -29,9 +29,7 @@ struct color_t {
 };
 
 bool output_persistence(const CC& cc,
-                        const std::vector<int>& ext,
-                        const std::vector<float>& lvl,
-                        const std::vector<std::vector<int>>& boundaries,
+                        const std::vector<Extremum>& ext,
                         const std::string& file, const TransformPoint& t) {
     DPoint tl(0,0);
     tl = t(tl);
@@ -40,9 +38,9 @@ bool output_persistence(const CC& cc,
     int w=std::ceil(br.x-tl.x)+1, h=std::ceil(br.y-tl.y)+1;
     color_t* im = new color_t[w*h];
     for(size_t i=0, n=ext.size(); i<n; i++) {
-        float v = lvl[i];
-        std::vector<int>::const_iterator it, end=boundaries[i].end();
-        for(it=boundaries[i].begin(); it!=end; ++it) {
+        float v = ext[i].plevel;
+        std::vector<int>::const_iterator it, end=ext[i].boundaries.end();
+        for(it=ext[i].boundaries.begin(); it!=end; ++it) {
             std::vector<DPoint> curve =
                 sample_ll(cc.continua[*it], v, cc, 5);
             draw_curve(curve, color_t(255,0,0), im, w, h, t);
@@ -56,11 +54,6 @@ bool output_persistence(const CC& cc,
 void display_stats(const CC& cc) {
     std::cout << "dual pixels: " << (cc.w-1)*(cc.h-1) << ", ";
     int n=0;
-    for(int i=0, end=2*cc.w*cc.h; i<end; i++)
-        if(cc.contours[i].parent<0 && cc.contours[i].p.x>=0)
-            ++n;
-    std::cout << "contours: " << n << ", ";
-    n = 0;
     for(int i=0; i<4; i++) {
         std::list<std::list<int>>::const_iterator it=cc.R.chainCode[i].begin(),
             end=cc.R.chainCode[i].end();
@@ -70,7 +63,9 @@ void display_stats(const CC& cc) {
     assert(n%2 == 0);
     n /= 2;
     std::cout << "continua: " << cc.continua.size() << " ("
-              << n << " open, " << cc.continua.size()-n << " closed)"
+              << n << " open, " << cc.continua.size()-n << " closed)\n"
+              << cc.minima.size() << " minima, "
+              << cc.maxima.size() << " maxima"
               << std::endl;
 }
 
@@ -111,14 +106,12 @@ int main(int argc, char* argv[]) {
     CC cc(im,(int)w,(int)h);
     display_stats(cc);
     if(! min.empty() &&
-       !output_persistence(cc, cc.minima, cc.persistLevelMin, cc.boundariesMin,
-                           min, zoom)) {
+       !output_persistence(cc, cc.minima, min, zoom)) {
         std::cerr << "Error saving image file " << min << std::endl;
         return 1;
     }
     if(! max.empty() &&
-       !output_persistence(cc, cc.maxima, cc.persistLevelMax, cc.boundariesMax,
-                           max, zoom)) {
+       !output_persistence(cc, cc.maxima, max, zoom)) {
         std::cerr << "Error saving image file " << max << std::endl;
         return 1;
     }

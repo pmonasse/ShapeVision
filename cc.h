@@ -48,15 +48,20 @@ struct Rect {
     Rect(Pos topLeft, Pos bottomRight) : tl(topLeft), br(bottomRight) {}
 };
 
+struct Extremum {
+    int contour; ///< Index of contour in CC
+    float plevel; ///< Persistence level
+    std::vector<int> boundaries; ///< Index of continua for persistence region
+    Extremum(int ctr): contour(ctr), plevel(-1) {}
+};
+
 /// Contours and continua
 struct CC {
     Contour* contours;
     std::vector<Continuum> continua;
     Rect R;
     int w,h;
-    std::vector<int> maxima, minima;
-    std::vector<float> persistLevelMax, persistLevelMin;
-    std::vector<std::vector<int>> boundariesMax, boundariesMin;
+    std::vector<Extremum> maxima, minima;
     CC(const float* im, int w, int h);
 
     int idx(int x, int y) const { return y*w+x; }
@@ -88,15 +93,14 @@ private:
     void set_side_io(Continuum& c, int side, int coord);
     bool at_border(const DPoint& mme, int side, int coord) const;
     void persistence();
-    std::vector<float> persistence_levels(const std::vector<int>& ext,
-                                          const std::vector<int>& tag) const;
+    void persistence_levels(std::vector<Extremum>& ext,
+                            const std::vector<int>& tag) const;
     template <typename Cmp>
-    std::vector<std::vector<int>>
-    find_bound_contours(const Cmp& cmp,
-                        const std::vector<int>& par,
-                        const std::vector<int>& tag,
-                        const std::vector<int>& ext,
-                        bool isMaxTree) const;
+    void find_bound_contours(const Cmp& cmp,
+                             const std::vector<int>& par,
+                             const std::vector<int>& tag,
+                             std::vector<Extremum>& ext,
+                             bool isMaxTree) const;
 };
 
 #endif

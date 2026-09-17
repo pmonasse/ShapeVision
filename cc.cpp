@@ -591,22 +591,23 @@ std::vector<int> count_children(const std::vector<int>& par,
 /// - to persistence contour for an extremum
 /// - to the associated extremmum otherwise.
 /// The global extremmum points to itself.
-template <typename Cmp>
-std::vector<int> persistence_ext(const Contour* ctr, int n,
-                                 const std::vector<std::vector<int>>& edges,
-                                 const Cmp& cmp,
-                                 std::vector<int>& par, std::vector<int>& tag) {
+template <typename Cmp> std::vector<Extremum>
+persistence_ext(const Contour* ctr, int n,
+                const std::vector<std::vector<int>>& edges,
+                const Cmp& cmp,
+                std::vector<int>& par, std::vector<int>& tag) {
     NbhCtr nbh(edges);
     par = max_tree(n, cmp, nbh);
     std::vector<int> nChildren = count_children(par, ctr);
     tag = std::vector<int>(n,-1);
     // Collect leaves (extrema) into stack
-    std::vector<int> leaves;
+    std::vector<Extremum> leaves;
     for(int i=0; i<n; i++)
         if(nChildren[i]==0)
-            leaves.push_back(i);
+            leaves.emplace_back(i);
     std::stack<int> front;
-    for(int i : leaves) {
+    for(const Extremum& e : leaves) {
+        int i = e.contour;
         tag[i] = i;
         front.push(i);
     }
@@ -631,22 +632,20 @@ std::vector<int> persistence_ext(const Contour* ctr, int n,
     return leaves;
 }
 
-/// Return a vector of same size as \a ext (vector of maxima or of minima)
-/// storing for each the contours involved in the boundary of its persistence
-/// region. The persistence region is implicitly stored in \a par and \a tag.
+/// Storing for each extermum the contours involved in the boundary of its
+/// persistence region.
+/// The persistence region is implicitly stored in \a par and \a tag.
 /// \sa persistence_ext
 template <typename Cmp>
-std::vector<std::vector<int>>
-CC::find_bound_contours(const Cmp& cmp,
-                        const std::vector<int>& par,
-                        const std::vector<int>& tag,
-                        const std::vector<int>& ext,
-                        bool isMaxTree) const {
+void CC::find_bound_contours(const Cmp& cmp,
+                             const std::vector<int>& par,
+                             const std::vector<int>& tag,
+                             std::vector<Extremum>& ext,
+                             bool isMaxTree) const {
     int Continuum::*ctrIn=&Continuum::supCtr;
     int Continuum::*ctrOut=&Continuum::infCtr;
     if(!isMaxTree)
         std::swap(ctrIn, ctrOut); 
-    std::vector<std::vector<int>> boundaries(ext.size());
     for(int i=0, n=(int)continua.size(); i!=n; i++) {
         int j = canonical(continua[i].*ctrIn, par, cmp);
         int k = tag[j];
@@ -654,23 +653,22 @@ CC::find_bound_contours(const Cmp& cmp,
             j = k;
         k = canonical(continua[i].*ctrOut, par, cmp);
         if(tag[k]!=j) {
-            std::vector<int>::const_iterator it =
-                std::lower_bound(ext.begin(), ext.end(), j);
-            assert(it!=ext.end() && *it==j);
-            boundaries[it-ext.begin()].push_back(i);
+            auto cmp = [](const Extremum& e1, const Extremum& e2) {
+                return e1.contour < e2.contour; };
+            std::vector<Extremum>::const_iterator it =
+                std::lower_bound(ext.begin(), ext.end(), Extremum(j), cmp);
+            assert(it!=ext.end() && it->contour==j);
+            ext[it-ext.begin()].boundaries.push_back(i);
         }
     }
-    return boundaries;
 }
 
 /// Compute persistence levels of extrema \a ext.
-std::vector<float> CC::persistence_levels(const std::vector<int>& ext,
-                                          const std::vector<int>& tag) const {
+void CC::persistence_levels(std::vector<Extremum>& ext,
+                            const std::vector<int>& tag) const {
     size_t n = ext.size();
-    std::vector<float> levels(n);
     for(size_t i=0; i<n; i++)
-        levels[i] = contours[tag[ext[i]]].lvl;
-    return levels;
+        ext[i].plevel = contours[tag[ext[i].contour]].lvl;
 }
 
 /// Compute persistence maps.
@@ -688,9 +686,9 @@ void CC::persistence() {
     maxima = persistence_ext(contours, 2*w*h, edges, cmpMax, parMax, tagMax);
     minima = persistence_ext(contours, 2*w*h, edges, cmpMin, parMin, tagMin);
 
-    persistLevelMax = persistence_levels(maxima, tagMax);
-    persistLevelMin = persistence_levels(minima, tagMin);
+    persistence_levels(maxima, tagMax);
+    persistence_levels(minima, tagMin);
     
-    boundariesMax = find_bound_contours(cmpMax, parMax, tagMax, maxima, true);
-    boundariesMin = find_bound_contours(cmpMin, parMin, tagMin, minima, false);
+    find_bound_contours(cmpMax, parMax, tagMax, maxima, true);
+    find_bound_contours(cmpMin, parMin, tagMin, minima, false);
 }
