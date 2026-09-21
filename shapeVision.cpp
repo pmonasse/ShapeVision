@@ -14,16 +14,22 @@
 #include <cmath>
 #include <sstream>
 
+/// Region of original image to crop
 struct Crop {
     int x, y, w, h;
     Crop(int w0=0, int h0=0): x(0), y(0), w(w0), h(h0) {}
 };
 
+/// Output crop region
 std::ostream& operator<<(std::ostream& s, const Crop& C) {
     return s << C.w << 'x' << C.h << '+' << C.x << '+' << C.y;
-}    
+}
 
+/// Input crop region.
+/// Format is wxh+x+y or wxh. Value 0 for w or h means to image right or bottom.
+/// \a w can be omitted (equivalent 0). If omitted, +x+y means +0+0.
 std::istream& operator>>(std::istream& str, Crop& C) {
+    C = Crop();
     std::string s;
     str >> s;
     if(str.fail()) return str;
@@ -46,6 +52,7 @@ std::istream& operator>>(std::istream& str, Crop& C) {
     return str;
 }
 
+/// Zoom from given center
 struct TransformZoom : public TransformPoint {
     int z, cx, cy;
     TransformZoom(int zoom, int x, int y): z(zoom), cx(x), cy(y) {}
@@ -54,6 +61,7 @@ struct TransformZoom : public TransformPoint {
     }
 };
 
+/// Pixel color
 struct color_t {
     unsigned char r,g,b;
     color_t(): r(255), g(255), b(255) {}
@@ -61,9 +69,12 @@ struct color_t {
     :r(r0),g(g0),b(b0) {}
 };
 
+/// Save persistence boundary image.
+/// \a s is the sampling step, points can be transformed by zoom \a t.
+/// \a w and \a h determine the dimensions of original image that are drawn.
 bool output_persistence(const CC& cc,
                         const std::vector<Extremum>& ext,
-                        const std::string& file,
+                        const std::string& file, int s,
                         const TransformPoint& t, int w, int h) {
     DPoint tl(0,0);
     tl = t(tl);
@@ -76,7 +87,7 @@ bool output_persistence(const CC& cc,
         std::vector<int>::const_iterator it, end=ext[i].boundaries.end();
         for(it=ext[i].boundaries.begin(); it!=end; ++it) {
             std::vector<DPoint> curve =
-                sample_ll(cc.continua[*it], v, cc, 5);
+                sample_ll(cc.continua[*it], v, cc, s);
             draw_curve(curve, color_t(255,0,0), im, w, h, t);
         }
     }
@@ -85,6 +96,7 @@ bool output_persistence(const CC& cc,
     return ok;
 }
 
+/// Info about contours and continua
 void display_stats(const CC& cc) {
     std::cout << "dual pixels: " << (cc.w-1)*(cc.h-1) << ", ";
     int n=0;
@@ -109,7 +121,7 @@ void display_stats(const CC& cc) {
 int main(int argc, char* argv[]) { 
     // parse arguments
     CmdLine cmd;
-    int z=1;
+    int z=1, s=1;
     std::string min, max;
     Crop crop;
     cmd.add( make_option('m', min, "min")
@@ -117,9 +129,11 @@ int main(int argc, char* argv[]) {
     cmd.add( make_option('M', max, "max")
              .doc("max-persistence output image") );
     cmd.add( make_option('z', z, "zoom")
-             .doc("Zoom factor (integer) for output images") );
+             .doc("Zoom factor (positive integer) for output images") );
     cmd.add( make_option('c', crop, "crop")
              .doc("wxh+x+y = rect [x,x+w]x[y,y+h]") );
+    cmd.add( make_option('s', s, "sampling")
+             .doc("samples (>=0) per pixel unit") );
     try {
         cmd.process(argc, argv);
     } catch(const std::string& s) {
@@ -141,6 +155,14 @@ int main(int argc, char* argv[]) {
         std::cerr << "Unable to load image " << argv[1] << std::endl;
         return 1;
     }
+    if(z<1) {
+        std::cerr << "Zoom factor z must be positive" << std::endl;
+        return 1;
+    }
+    if(s<0) {
+        std::cerr << "Sampling step s must be non-negative" << std::endl;
+        return 1;
+    }
     if(crop.w==0)
         crop.w = w-crop.x;
     if(crop.h==0)
@@ -154,12 +176,12 @@ int main(int argc, char* argv[]) {
     CC cc(im,(int)w,(int)h);
     display_stats(cc);
     if(! min.empty() &&
-       !output_persistence(cc, cc.minima, min, zoom, crop.w, crop.h)) {
+       !output_persistence(cc, cc.minima, min, s, zoom, crop.w, crop.h)) {
         std::cerr << "Error saving image file " << min << std::endl;
         return 1;
     }
     if(! max.empty() &&
-       !output_persistence(cc, cc.maxima, max, zoom, crop.w, crop.h)) {
+       !output_persistence(cc, cc.maxima, max, s, zoom, crop.w, crop.h)) {
         std::cerr << "Error saving image file " << max << std::endl;
         return 1;
     }
