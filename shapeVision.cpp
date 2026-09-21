@@ -32,23 +32,16 @@ std::istream& operator>>(std::istream& str, Crop& C) {
     if(is.fail()) // w is optional
         is.clear();
     char c=0;
-    is >> c;
-    if(c!='x') {
+    is >> c >> C.h;
+    if(c!='x' || is.fail()) {
         str.setstate(std::ios::failbit);
         return str;
     }
-    is >> C.h;
-    if(is.fail()) // h is optional
-        is.clear();
-    c=0;
-    is >> c;
-    if(c!='+') {
-        if(! is.eof())
-            str.setstate(std::ios::failbit);
+    if(is.eof()) // +x+y is optional
         return str;
-    }
-    is >> C.x >> C.y;
-    if(is.fail())
+    c=0;
+    is >> c >> C.x >> C.y;
+    if(c!='+' || is.fail())
         str.setstate(std::ios::failbit);
     return str;
 }
