@@ -64,6 +64,8 @@ struct CC {
     std::vector<Extremum> maxima, minima;
     CC(const float* im, int w, int h);
 
+    void persistence(int wMin=1);
+    
     int idx(int x, int y) const { return y*w+x; }
     int idx(Pos p) const { return idx(p.x,p.y); }
     DPoint mme_br(const DPoint& p) const;
@@ -92,7 +94,6 @@ private:
     void canonize();
     void set_side_io(Continuum& c, int side, int coord);
     bool at_border(const DPoint& mme, int side, int coord) const;
-    void persistence();
     void persistence_levels(std::vector<Extremum>& ext,
                             const std::vector<int>& tag) const;
     template <typename Cmp>

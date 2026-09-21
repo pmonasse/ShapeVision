@@ -452,7 +452,6 @@ CC::CC(const float* im, int w, int h): R(Pos(0,0),Pos(w-1,h-1)), w(w), h(h) {
     }
     std::swap(R, rects.back());
     canonize();
-    persistence();
 }
 
 /// Remove union info of contours and continua by referencing only roots.
@@ -584,6 +583,7 @@ std::vector<int> count_children(const std::vector<int>& par,
 /// \param ctr nodes of the graph.
 /// \param n number of nodes.
 /// \param edges gives for each node index its neighbors.
+/// \param wMin min weight of extrema (number of leaves in persistence region).
 /// \param[out] par parent map.
 /// \param[out] tag is a tag associated each node.
 /// \return nodes corresponding to extrema (of type according to \a cmp).
@@ -594,17 +594,20 @@ std::vector<int> count_children(const std::vector<int>& par,
 template <typename Cmp> std::vector<Extremum>
 persistence_ext(const Contour* ctr, int n,
                 const std::vector<std::vector<int>>& edges,
-                const Cmp& cmp,
+                int wMin, const Cmp& cmp,
                 std::vector<int>& par, std::vector<int>& tag) {
     NbhCtr nbh(edges);
     par = max_tree(n, cmp, nbh);
     std::vector<int> nChildren = count_children(par, ctr);
     tag = std::vector<int>(n,-1);
+    std::vector<int> nLeaves(n,0); // #leaves in each subtree
     // Collect leaves (extrema) into stack
     std::vector<Extremum> leaves;
     for(int i=0; i<n; i++)
-        if(nChildren[i]==0)
+        if(nChildren[i]==0) {
             leaves.emplace_back(i);
+            nLeaves[i] = 1;
+        }
     std::stack<int> front;
     for(const Extremum& e : leaves) {
         int i = e.contour;
@@ -617,6 +620,7 @@ persistence_ext(const Contour* ctr, int n,
         int j = par[i];
         if(i==j)
             continue;
+        nLeaves[j] += nLeaves[i];
         if(tag[j]>=0) { // Already an extremum associated to parent
             if(cmp(tag[i],tag[j]))
                 tag[tag[i]] = j; // Dominated extemum, point to j
@@ -628,6 +632,13 @@ persistence_ext(const Contour* ctr, int n,
             tag[j] = tag[i];
         if(--nChildren[j]==0) // This was last child of parent
             front.push(j); // Propagate further dominating extremum
+    }
+    if(wMin>1) {
+        auto cond = [&tag,&nLeaves,wMin](const Extremum& e) {
+            return nLeaves[tag[e.contour]] < wMin; };
+        std::vector<Extremum>::const_iterator it =
+            std::remove_if(leaves.begin(), leaves.end(), cond);
+        leaves.erase(it, leaves.end());
     }
     return leaves;
 }
@@ -657,8 +668,8 @@ void CC::find_bound_contours(const Cmp& cmp,
                 return e1.contour < e2.contour; };
             std::vector<Extremum>::const_iterator it =
                 std::lower_bound(ext.begin(), ext.end(), Extremum(j), cmp);
-            assert(it!=ext.end() && it->contour==j);
-            ext[it-ext.begin()].boundaries.push_back(i);
+            if(it!=ext.end() && it->contour==j)
+                ext[it-ext.begin()].boundaries.push_back(i);
         }
     }
 }
@@ -672,7 +683,7 @@ void CC::persistence_levels(std::vector<Extremum>& ext,
 }
 
 /// Compute persistence maps.
-void CC::persistence() {
+void CC::persistence(int wMin) {
     // Record neighbors
     std::vector<std::vector<int>> edges(2*w*h);
     std::vector<Continuum>::const_iterator it, end=continua.end();
@@ -683,8 +694,10 @@ void CC::persistence() {
     CmpCtr<std::less<float>> cmpMax(contours);
     CmpCtr<std::greater<float>> cmpMin(contours);
     std::vector<int> tagMax, tagMin, parMax, parMin;
-    maxima = persistence_ext(contours, 2*w*h, edges, cmpMax, parMax, tagMax);
-    minima = persistence_ext(contours, 2*w*h, edges, cmpMin, parMin, tagMin);
+    maxima = persistence_ext(contours, 2*w*h, edges, wMin,
+                             cmpMax, parMax, tagMax);
+    minima = persistence_ext(contours, 2*w*h, edges, wMin,
+                             cmpMin, parMin, tagMin);
 
     persistence_levels(maxima, tagMax);
     persistence_levels(minima, tagMin);

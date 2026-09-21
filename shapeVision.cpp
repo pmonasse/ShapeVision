@@ -124,6 +124,7 @@ int main(int argc, char* argv[]) {
     int z=1, s=1;
     std::string min, max;
     Crop crop;
+    int wMin=1;
     cmd.add( make_option('m', min, "min")
              .doc("min-persistence output image") );
     cmd.add( make_option('M', max, "max")
@@ -134,6 +135,8 @@ int main(int argc, char* argv[]) {
              .doc("wxh+x+y = rect [x,x+w]x[y,y+h]") );
     cmd.add( make_option('s', s, "sampling")
              .doc("samples (>=0) per pixel unit") );
+    cmd.add( make_option('w', wMin, "min-weight")
+             .doc("Min number of extrema in persistence region") );
     try {
         cmd.process(argc, argv);
     } catch(const std::string& s) {
@@ -174,6 +177,7 @@ int main(int argc, char* argv[]) {
 
     TransformZoom zoom(z, crop.x, crop.y);
     CC cc(im,(int)w,(int)h);
+    cc.persistence(wMin);
     display_stats(cc);
     if(! min.empty() &&
        !output_persistence(cc, cc.minima, min, s, zoom, crop.w, crop.h)) {
