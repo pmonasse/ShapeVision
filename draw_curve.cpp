@@ -3,27 +3,25 @@
  * @file draw_curve.cpp
  * @brief Draw a curve in an image
  * 
- * (C) 2011-2014, 2019, Pascal Monasse <pascal.monasse@enpc.fr>
+ * (C) 2011-2014, 2019, 2026 Pascal Monasse <pascal.monasse@enpc.fr>
  */
 
 #ifdef DRAW_CURVE_H
+#include <cmath>
 
-/// max(0,min(abs(v),m-1))
-static int clip(float v, int m) {
-    if(v<0)
-        return 0;
-    if(v>=m)
-        return m-1;
-    return (int)v;
+/// Check point is inide image
+static int inside(int x, int y, int w, int h) {
+    return 0<=x && x<w && 0<=y && y<h;
 }
 
 /// Draw line in image
 template <typename T>
 void draw_line(const DPoint& p, const DPoint& q, T v, T* im, int w, int h) {
-    int x0=clip(p.x,w), x1=clip(q.x,w);
-    int y0=clip(p.y,h), y1=clip(q.y,h);
+    int x0=(int)round(p.x), x1=(int)round(q.x);
+    int y0=(int)round(p.y), y1=(int)round(q.y);
     if(x0==x1 && y0==y1) {
-        im[y0*w+x0] = v;
+        if(inside(x0, y0, w, h))
+            im[y0*w+x0] = v;
         return;
     }
     int sx = (x0<x1)? +1: -1;
@@ -34,7 +32,8 @@ void draw_line(const DPoint& p, const DPoint& q, T v, T* im, int w, int h) {
     if(adx>=ady) {
         int z=-adx/2;
         while(x!=dx) {
-            im[(y+y0)*w+(x+x0)] = v;
+            if(inside(x+x0, y+y0, w, h))
+                im[(y+y0)*w+(x+x0)] = v;
             x += sx;
             z += ady;
             if(z>0) {
@@ -45,7 +44,8 @@ void draw_line(const DPoint& p, const DPoint& q, T v, T* im, int w, int h) {
     } else {
         int z=-ady/2;
         while(y!=dy) {
-            im[(y+y0)*w+(x+x0)] = v;
+            if(inside(x+x0, y+y0, w, h))
+                im[(y+y0)*w+(x+x0)] = v;
             y += sy;
             z += adx;
             if(z>0) {

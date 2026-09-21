@@ -12,12 +12,52 @@
 #include "sample_ll.h"
 #include "draw_curve.h"
 #include <cmath>
+#include <sstream>
+
+struct Crop {
+    int x, y, w, h;
+    Crop(int w0=0, int h0=0): x(0), y(0), w(w0), h(h0) {}
+};
+
+std::ostream& operator<<(std::ostream& s, const Crop& C) {
+    return s << C.w << 'x' << C.h << '+' << C.x << '+' << C.y;
+}    
+
+std::istream& operator>>(std::istream& str, Crop& C) {
+    std::string s;
+    str >> s;
+    if(str.fail()) return str;
+    std::istringstream is(s);
+    is >> C.w;
+    if(is.fail()) // w is optional
+        is.clear();
+    char c=0;
+    is >> c;
+    if(c!='x') {
+        str.setstate(std::ios::failbit);
+        return str;
+    }
+    is >> C.h;
+    if(is.fail()) // h is optional
+        is.clear();
+    c=0;
+    is >> c;
+    if(c!='+') {
+        if(! is.eof())
+            str.setstate(std::ios::failbit);
+        return str;
+    }
+    is >> C.x >> C.y;
+    if(is.fail())
+        str.setstate(std::ios::failbit);
+    return str;
+}
 
 struct TransformZoom : public TransformPoint {
-    int z;
-    TransformZoom(int zoom=1): z(zoom) {}
+    int z, cx, cy;
+    TransformZoom(int zoom, int x, int y): z(zoom), cx(x), cy(y) {}
     DPoint operator()(const DPoint& p) const {
-        return DPoint(z*p.x, z*p.y);
+        return DPoint(z*(p.x-cx), z*(p.y-cy));
     }
 };
 
@@ -30,12 +70,13 @@ struct color_t {
 
 bool output_persistence(const CC& cc,
                         const std::vector<Extremum>& ext,
-                        const std::string& file, const TransformPoint& t) {
+                        const std::string& file,
+                        const TransformPoint& t, int w, int h) {
     DPoint tl(0,0);
     tl = t(tl);
-    DPoint br(cc.w-1, cc.h-1);
+    DPoint br(w-1, h-1);
     br = t(br);
-    int w=std::ceil(br.x-tl.x)+1, h=std::ceil(br.y-tl.y)+1;
+    w=std::ceil(br.x-tl.x)+1; h=std::ceil(br.y-tl.y)+1;
     color_t* im = new color_t[w*h];
     for(size_t i=0, n=ext.size(); i<n; i++) {
         float v = ext[i].plevel;
@@ -77,12 +118,15 @@ int main(int argc, char* argv[]) {
     CmdLine cmd;
     int z=1;
     std::string min, max;
+    Crop crop;
     cmd.add( make_option('m', min, "min")
              .doc("min-persistence output image") );
     cmd.add( make_option('M', max, "max")
              .doc("max-persistence output image") );
     cmd.add( make_option('z', z, "zoom")
              .doc("Zoom factor (integer) for output images") );
+    cmd.add( make_option('c', crop, "crop")
+             .doc("wxh+x+y = rect [x,x+w]x[y,y+h]") );
     try {
         cmd.process(argc, argv);
     } catch(const std::string& s) {
@@ -92,6 +136,9 @@ int main(int argc, char* argv[]) {
     if(argc != 2) {
         std::cerr << "Usage: " << argv[0] << " [options] imgIn.png\n"
                   << cmd;
+        std::cerr << "Crop: w=0 or omitted means image right. "
+                  << "h=0 means image height. "
+                  << "+x+y is optional" << std::endl;
         return 1;
     }
 
@@ -101,17 +148,25 @@ int main(int argc, char* argv[]) {
         std::cerr << "Unable to load image " << argv[1] << std::endl;
         return 1;
     }
+    if(crop.w==0)
+        crop.w = w-crop.x;
+    if(crop.h==0)
+        crop.h = h-crop.y;
+    if(crop.w<=0 || crop.h<=0) {
+        std::cerr << "Crop region is outside image" << std::endl;
+        return 1;
+    }
 
-    TransformZoom zoom(z);
+    TransformZoom zoom(z, crop.x, crop.y);
     CC cc(im,(int)w,(int)h);
     display_stats(cc);
     if(! min.empty() &&
-       !output_persistence(cc, cc.minima, min, zoom)) {
+       !output_persistence(cc, cc.minima, min, zoom, crop.w, crop.h)) {
         std::cerr << "Error saving image file " << min << std::endl;
         return 1;
     }
     if(! max.empty() &&
-       !output_persistence(cc, cc.maxima, max, zoom)) {
+       !output_persistence(cc, cc.maxima, max, zoom, crop.w, crop.h)) {
         std::cerr << "Error saving image file " << max << std::endl;
         return 1;
     }
