@@ -96,6 +96,10 @@ private:
     bool at_border(const DPoint& mme, int side, int coord) const;
     void persistence_levels(std::vector<Extremum>& ext,
                             const std::vector<int>& tag) const;
+    void filter_extrema(const std::vector<int>& par,
+                        const std::vector<int>& tag,
+                        int wMin,
+                        std::vector<Extremum>& ext);
     template <typename Cmp>
     void find_bound_contours(const Cmp& cmp,
                              const std::vector<int>& par,
