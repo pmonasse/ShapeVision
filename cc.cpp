@@ -666,7 +666,7 @@ void CC::filter_extrema(const std::vector<int>& par,
     ext.erase(it, ext.end());
 }
 
-/// Storing for each extermum the contours involved in the boundary of its
+/// Store for each extremum the continua involved in the boundary of its
 /// persistence region.
 /// The persistence region is implicitly stored in \a par and \a tag.
 /// \sa persistence_ext
@@ -674,23 +674,23 @@ template <typename Cmp>
 void CC::find_bound_contours(const Cmp& cmp,
                              const std::vector<int>& par,
                              const std::vector<int>& tag,
-                             std::vector<Extremum>& ext,
-                             bool isMaxTree) const {
+                             bool isMaxTree) {
+    std::vector<Extremum>& ext = isMaxTree? maxima: minima;
     int Continuum::*ctrIn=&Continuum::supCtr;
     int Continuum::*ctrOut=&Continuum::infCtr;
     if(!isMaxTree)
         std::swap(ctrIn, ctrOut); 
+    auto pred = [](const Extremum& e1, const Extremum& e2) {
+        return e1.contour < e2.contour; };
     for(int i=0, n=(int)continua.size(); i!=n; i++) {
         int j = canonical(continua[i].*ctrIn, par, cmp);
         int k = tag[j];
-        if(cmp(j,k)) //contours[k].lvl > contours[j].lvl)
+        if(cmp(j,k)) // If j is not extremum, k is
             j = k;
         k = canonical(continua[i].*ctrOut, par, cmp);
         if(tag[k]!=j) {
-            auto cmp = [](const Extremum& e1, const Extremum& e2) {
-                return e1.contour < e2.contour; };
             std::vector<Extremum>::const_iterator it =
-                std::lower_bound(ext.begin(), ext.end(), Extremum(j), cmp);
+                std::lower_bound(ext.begin(), ext.end(), Extremum(j), pred);
             if(it!=ext.end() && it->contour==j)
                 ext[it-ext.begin()].boundaries.push_back(i);
         }
@@ -728,6 +728,6 @@ void CC::persistence(int wMin) {
     persistence_levels(maxima, tagMax);
     persistence_levels(minima, tagMin);
 
-    find_bound_contours(cmpMax, parMax, tagMax, maxima, true);
-    find_bound_contours(cmpMin, parMin, tagMin, minima, false);
+    find_bound_contours(cmpMax, parMax, tagMax, true);
+    find_bound_contours(cmpMin, parMin, tagMin, false);
 }

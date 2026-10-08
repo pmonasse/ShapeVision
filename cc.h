@@ -104,8 +104,7 @@ private:
     void find_bound_contours(const Cmp& cmp,
                              const std::vector<int>& par,
                              const std::vector<int>& tag,
-                             std::vector<Extremum>& ext,
-                             bool isMaxTree) const;
+                             bool isMaxTree);
 };
 
 #endif
