@@ -1,6 +1,8 @@
 # ShapeVision
 Copyright Martin Brooks, Pascal Monasse
 
+https://github.com/pmonasse/ShapeVision
+
 ## License
 Mozilla Public License v2
 
@@ -24,7 +26,7 @@ Crop: w=0 or omitted means image right. h=0 means image height. +x+y is optional
 
 ## Example
 ```
-$ ./build/shapeVision z 100 -m small_min.png -M small_max.png data/small.png
+$ ./build/shapeVision -z 100 -m small_min.png -M small_max.png data/small.png
 dual pixels: 16, continua: 27 (19 open, 8 closed)
 5 minima, 6 maxima
 '''
