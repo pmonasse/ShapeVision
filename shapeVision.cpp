@@ -12,6 +12,7 @@
 #include "sample_ll.h"
 #include "draw_curve.h"
 #include <cmath>
+#include <algorithm>
 #include <sstream>
 
 /// Region of original image to crop
@@ -68,6 +69,13 @@ struct color_t {
     color_t(unsigned char r0, unsigned char g0, unsigned char b0)
     :r(r0),g(g0),b(b0) {}
 };
+
+/// Set image values to integer.
+/// This ensures there is no numerical problem for saddle points.
+/// It could happen when reading color images that are converted to grayscale.
+void set_int(float* im, size_t w, size_t h) {
+    std::transform(im, im+w*h, im, std::roundf);
+}
 
 /// Save persistence boundary image.
 /// \a s is the sampling step, points can be transformed by zoom \a t.
@@ -158,6 +166,7 @@ int main(int argc, char* argv[]) {
         std::cerr << "Unable to load image " << argv[1] << std::endl;
         return 1;
     }
+    set_int(im, w, h);
     if(z<1) {
         std::cerr << "Zoom factor z must be positive" << std::endl;
         return 1;
